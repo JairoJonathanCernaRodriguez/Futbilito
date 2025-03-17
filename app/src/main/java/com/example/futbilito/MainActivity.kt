@@ -8,12 +8,15 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
 import kotlin.math.min
@@ -51,8 +54,8 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             val ay = it.values[1]
 
             // Ajustar la posición en base al sensor (invertido porque el acelerómetro da valores contrarios)
-            _x = max(-400f, min(400f, _x - ax * 5))
-            _y = max(-800f, min(800f, _y + ay * 5))
+            _x = max(-450f, min(450f, _x - ax * 5))
+            _y = max(-700f, min(700f, _y + ay * 5))
         }
     }
 
@@ -61,25 +64,28 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
 @Composable
 fun FutbolitoGame(x: Float, y: Float) {
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val ballRadius = 7.dp.toPx()
-        val goalWidth = ballRadius * 2
-        val goalHeight = ballRadius * 2
-
-        // Dibujar la cancha ocupando toda la pantalla
-        drawRect(color = Color.Green, size = size)
-        drawLine(Color.White, Offset(size.width * 0.1f, size.height * 0.5f), Offset(size.width * 0.9f, size.height * 0.5f), strokeWidth = 5f)
-        drawCircle(Color.White, radius = size.width * 0.15f, center = Offset(size.width / 2, size.height / 2), alpha = 0.5f)
-
-        // Dibujar las porterías en los márgenes de la pelota
-        drawRect(Color.White, topLeft = Offset((size.width - goalWidth) / 2, 0f), size = Size(goalWidth, goalHeight))
-        drawRect(Color.White, topLeft = Offset((size.width - goalWidth) / 2, size.height - goalHeight), size = Size(goalWidth, goalHeight))
-
-        // Dibujar la pelota
-        drawCircle(
-            color = Color.Gray,
-            radius = ballRadius, // Pelota de tamaño 7.dp
-            center = Offset(size.width / 2 + x, size.height / 2 + y)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(id = R.drawable.cancha_futbol),
+            contentDescription = "Cancha de fútbol",
+            modifier = Modifier.fillMaxSize()
         )
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val ballRadius = 7.dp.toPx()
+            val goalWidth = ballRadius * 2
+            val goalHeight = ballRadius * 2
+
+            // Dibujar las porterías en los márgenes de la pelota
+            drawRect(Color.White, topLeft = Offset((size.width - goalWidth) / 2, 0f), size = Size(goalWidth, goalHeight))
+            drawRect(Color.White, topLeft = Offset((size.width - goalWidth) / 2, size.height - goalHeight), size = Size(goalWidth, goalHeight))
+
+            // Dibujar la pelota
+            drawCircle(
+                color = Color.Black,
+                radius = ballRadius, // Pelota de tamaño 7.dp
+                center = Offset(size.width / 2 + x, size.height / 2 + y)
+            )
+        }
     }
 }
