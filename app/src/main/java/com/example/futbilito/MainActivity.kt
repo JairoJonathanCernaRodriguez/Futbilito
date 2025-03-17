@@ -32,6 +32,9 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     private var scoreLocal by mutableStateOf(0)
     private var scoreVisitante by mutableStateOf(0)
 
+    private var velocityX by mutableStateOf(0f) // Velocidad en el eje X
+    private var velocityY by mutableStateOf(0f) // Velocidad en el eje Y
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sensorManager = getSystemService(SensorManager::class.java)
@@ -57,12 +60,37 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
-            val ax = it.values[0]
-            val ay = it.values[1]
+            val ax = it.values[0] // Aceleración en X
+            val ay = it.values[1] // Aceleración en Y
 
-            // Aumentar margen en horizontal y reducir en vertical
-            _x = max(-450f, min(450f, _x - ax * 5))
-            _y = max(-700f, min(700f, _y + ay * 5))
+            // Actualizar las velocidades con base en la aceleración
+            velocityX -= ax * 5
+            velocityY += ay * 5
+
+            // Limitar la velocidad máxima
+            velocityX = max(-20f, min(20f, velocityX))
+            velocityY = max(-20f, min(20f, velocityY))
+
+            // Actualizar la posición de la pelota
+            _x += velocityX
+            _y += velocityY
+
+            // Detectar rebote en los bordes (izquierda, derecha, arriba, abajo)
+            if (_x < -450f) { // Limitar al borde izquierdo
+                _x = -450f
+                velocityX = -velocityX
+            } else if (_x > 450f) { // Limitar al borde derecho
+                _x = 450f
+                velocityX = -velocityX
+            }
+
+            if (_y < -420f) { // Limitar al borde superior
+                _y = -420f
+                velocityY = -velocityY
+            } else if (_y > 990f) { // Limitar al borde inferior
+                _y = 990f
+                velocityY = -velocityY
+            }
         }
     }
 
@@ -75,68 +103,95 @@ fun FutbolitoGame(x: Float, y: Float, scoreLocal: Int, scoreVisitante: Int, onLo
     var isBallInVisitanteGoal by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
+        // Imagen de la cancha con el marcador encima
+        Box(modifier = Modifier.fillMaxSize()) {
+
+            // Imagen de la cancha
+            Image(
+                painter = painterResource(id = R.drawable.cancha_con_marcador),
+                contentDescription = "Cancha de fútbol",
+                modifier = Modifier.fillMaxSize() // La imagen ocupa todo el espacio
+            )
+
+            // Dibujo del marcador sobre la cancha
+            Box(
+                modifier = Modifier
+                    .offset(x = 0.dp, y = 53.dp) // Ajusta la posición general del marcador
+                    .align(Alignment.TopCenter) // Alineamos el marcador al centro superior
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("LOCAL", fontSize = 40.sp, color = Color.Black)
-                    Text("$scoreLocal", fontSize = 50.sp, color = Color.Black)
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("VISITANTE", fontSize = 40.sp, color = Color.Black)
-                    Text("$scoreVisitante", fontSize = 50.sp, color = Color.Black)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // Marcador para el equipo local, ajusta su posición si es necesario
+                    Column(
+                        modifier = Modifier.offset(x = 20.dp) // Mueve el marcador del local a la izquierda
+                        , horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("LOCAL", fontSize = 20.sp, color = Color.Yellow)
+                        Text("$scoreLocal", fontSize = 40.sp, color = Color.Yellow)
+                    }
+                    // Marcador para el equipo visitante, ajusta su posición si es necesario
+                    Column(
+                        modifier = Modifier.offset(x = 0.dp) // Mueve el marcador del visitante a la derecha
+                        , horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("VISITANTE", fontSize = 18.sp, color = Color.Yellow)
+                        Text("$scoreVisitante", fontSize = 40.sp, color = Color.Yellow)
+                    }
                 }
             }
 
-            Box(modifier = Modifier.fillMaxSize()) {
-                Image(
-                    painter = painterResource(id = R.drawable.cancha_futbol),
-                    contentDescription = "Cancha de fútbol",
-                    modifier = Modifier.fillMaxSize()
-                )
+            // Canvas para las porterías y la pelota
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val ballRadius = 7.dp.toPx()
 
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val ballRadius = 7.dp.toPx()
-                    val goalWidth = ballRadius * 2
-                    val goalHeight = ballRadius * 2
-                    val goalOffset = 55.dp.toPx()
+                // Ajuste del tamaño de las porterías
+                val goalWidth = 15.dp.toPx() // Ajustado para hacerlas más grandes
+                val goalHeight = 15.dp.toPx() // Ajustado para hacerlas más grandes
 
-                    val goalXStart = (size.width - goalWidth) / 2
-                    val goalXEnd = goalXStart + goalWidth
+                // Calculamos el desplazamiento de las porterías
+                val goalOffsetTop = 225.dp.toPx() // Desplazamiento de la portería superior
+                val goalOffsetBottom = 20.dp.toPx() // Desplazamiento de la portería inferior
 
-                    drawRect(Color.Black, topLeft = Offset(goalXStart, goalOffset), size = Size(goalWidth, goalHeight))
-                    drawRect(Color.Black, topLeft = Offset(goalXStart, size.height - goalHeight - goalOffset), size = Size(goalWidth, goalHeight))
+                // Coordenadas de la portería superior
+                val goalXStart = (size.width - goalWidth) / 2
+                val goalXEnd = goalXStart + goalWidth
 
-                    val ballPosition = Offset(size.width / 2 + x, size.height / 2 + y)
-                    val isBallInsideGoalX = ballPosition.x in goalXStart..goalXEnd
-                    val isBallInLocal = isBallInsideGoalX && (ballPosition.y - ballRadius <= goalOffset + goalHeight)
-                    val isBallInVisitante = isBallInsideGoalX && (ballPosition.y + ballRadius >= size.height - goalOffset - goalHeight)
+                // Dibujar las porterías
+                drawRect(Color.Black, topLeft = Offset(goalXStart, goalOffsetTop), size = Size(goalWidth, goalHeight))
+                drawRect(Color.Black, topLeft = Offset(goalXStart, size.height - goalHeight - goalOffsetBottom), size = Size(goalWidth, goalHeight))
 
-                    // Detectar gol solo si la pelota acaba de entrar
-                    if (isBallInLocal && !isBallInLocalGoal) {
-                        onLocalGoal()
-                        isBallInLocalGoal = true
-                    } else if (!isBallInLocal) {
-                        isBallInLocalGoal = false
-                    }
+                // Posición de la pelota
+                val ballPosition = Offset(size.width / 2 + x, size.height / 2 + y)
+                val isBallInsideGoalX = ballPosition.x in goalXStart..goalXEnd
+                val isBallInLocal = isBallInsideGoalX && (ballPosition.y - ballRadius <= goalOffsetTop + goalHeight)
+                val isBallInVisitante = isBallInsideGoalX && (ballPosition.y + ballRadius >= size.height - goalOffsetBottom - goalHeight)
 
-                    if (isBallInVisitante && !isBallInVisitanteGoal) {
-                        onVisitanteGoal()
-                        isBallInVisitanteGoal = true
-                    } else if (!isBallInVisitante) {
-                        isBallInVisitanteGoal = false
-                    }
-
-                    // Dibujar la pelota
-                    drawCircle(
-                        color = Color(0.906f, 0.275f, 0.843f, 1.0f),
-                        radius = ballRadius,
-                        center = ballPosition
-                    )
+                // Detectar gol solo si la pelota acaba de entrar
+                if (isBallInLocal && !isBallInLocalGoal) {
+                    onLocalGoal()
+                    isBallInLocalGoal = true
+                } else if (!isBallInLocal) {
+                    isBallInLocalGoal = false
                 }
+
+                if (isBallInVisitante && !isBallInVisitanteGoal) {
+                    onVisitanteGoal()
+                    isBallInVisitanteGoal = true
+                } else if (!isBallInVisitante) {
+                    isBallInVisitanteGoal = false
+                }
+
+                // Dibujar la pelota
+                drawCircle(
+                    color = Color(0.906f, 0.275f, 0.843f, 1.0f), // Rosa brillante
+                    radius = ballRadius,
+                    center = ballPosition
+                )
             }
         }
     }
 }
+
+
