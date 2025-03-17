@@ -127,17 +127,17 @@ fun FutbolitoGame(x: Float, y: Float, scoreLocal: Int, scoreVisitante: Int, onLo
                 ) {
                     // Marcador para el equipo local, ajusta su posición si es necesario
                     Column(
-                        modifier = Modifier.offset(x = 20.dp) // Mueve el marcador del local a la izquierda
+                        modifier = Modifier.offset(x = 25.dp) // Mueve el marcador del local a la izquierda
                         , horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("LOCAL", fontSize = 20.sp, color = Color.Yellow)
-                        Text("$scoreLocal", fontSize = 40.sp, color = Color.Yellow)
+                        Text("$scoreLocal", fontSize = 70.sp, color = Color.Yellow)
                     }
                     // Marcador para el equipo visitante, ajusta su posición si es necesario
                     Column(
-                        modifier = Modifier.offset(x = 0.dp) // Mueve el marcador del visitante a la derecha
+                        modifier = Modifier.offset(x = -5.dp) // Mueve el marcador del visitante a la derecha
                         , horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("VISITANTE", fontSize = 18.sp, color = Color.Yellow)
-                        Text("$scoreVisitante", fontSize = 40.sp, color = Color.Yellow)
+                        Text("$scoreVisitante", fontSize = 70.sp, color = Color.Yellow)
                     }
                 }
             }
