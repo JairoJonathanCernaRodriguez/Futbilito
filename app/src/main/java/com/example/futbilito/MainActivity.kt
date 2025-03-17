@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.futbilito.R
 import kotlin.math.max
 import kotlin.math.min
 
@@ -62,7 +61,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             val ay = it.values[1]
 
             // Aumentar margen en horizontal y reducir en vertical
-            _x = max(-500f, min(500f, _x - ax * 5))
+            _x = max(-450f, min(450f, _x - ax * 5))
             _y = max(-700f, min(700f, _y + ay * 5))
         }
     }
@@ -72,26 +71,28 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
 @Composable
 fun FutbolitoGame(x: Float, y: Float, scoreLocal: Int, scoreVisitante: Int, onLocalGoal: () -> Unit, onVisitanteGoal: () -> Unit) {
+    var isBallInLocalGoal by remember { mutableStateOf(false) }
+    var isBallInVisitanteGoal by remember { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-            // Marcador estilo imagen proporcionada
             Row(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("LOCAL", fontSize = 20.sp, color = Color.Black)
-                    Text("$scoreLocal", fontSize = 36.sp, color = Color.Black)
+                    Text("LOCAL", fontSize = 40.sp, color = Color.Black)
+                    Text("$scoreLocal", fontSize = 50.sp, color = Color.Black)
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("VISITANTE", fontSize = 20.sp, color = Color.Black)
-                    Text("$scoreVisitante", fontSize = 36.sp, color = Color.Black)
+                    Text("VISITANTE", fontSize = 40.sp, color = Color.Black)
+                    Text("$scoreVisitante", fontSize = 50.sp, color = Color.Black)
                 }
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
                 Image(
-                    painter = painterResource(id = R.drawable.cancha_futbol), // Usa un recurso válido de imagen
+                    painter = painterResource(id = R.drawable.cancha_futbol),
                     contentDescription = "Cancha de fútbol",
                     modifier = Modifier.fillMaxSize()
                 )
@@ -100,25 +101,38 @@ fun FutbolitoGame(x: Float, y: Float, scoreLocal: Int, scoreVisitante: Int, onLo
                     val ballRadius = 7.dp.toPx()
                     val goalWidth = ballRadius * 2
                     val goalHeight = ballRadius * 2
-                    val goalOffset = 80.dp.toPx() // Mueve las porterías más hacia adent
+                    val goalOffset = 55.dp.toPx()
 
-                    // Dibujar las porterías más adentro
-                    drawRect(Color.Black, topLeft = Offset((size.width - goalWidth) / 2, goalOffset), size = Size(goalWidth, goalHeight))
-                    drawRect(Color.Black, topLeft = Offset((size.width - goalWidth) / 2, size.height - goalHeight - goalOffset), size = Size(goalWidth, goalHeight))
+                    val goalXStart = (size.width - goalWidth) / 2
+                    val goalXEnd = goalXStart + goalWidth
+
+                    drawRect(Color.Black, topLeft = Offset(goalXStart, goalOffset), size = Size(goalWidth, goalHeight))
+                    drawRect(Color.Black, topLeft = Offset(goalXStart, size.height - goalHeight - goalOffset), size = Size(goalWidth, goalHeight))
 
                     val ballPosition = Offset(size.width / 2 + x, size.height / 2 + y)
+                    val isBallInsideGoalX = ballPosition.x in goalXStart..goalXEnd
+                    val isBallInLocal = isBallInsideGoalX && (ballPosition.y - ballRadius <= goalOffset + goalHeight)
+                    val isBallInVisitante = isBallInsideGoalX && (ballPosition.y + ballRadius >= size.height - goalOffset - goalHeight)
 
-                    // Verificar si la pelota entra en la portería ajustada
-                    if (ballPosition.y - ballRadius <= goalHeight + goalOffset) {
+                    // Detectar gol solo si la pelota acaba de entrar
+                    if (isBallInLocal && !isBallInLocalGoal) {
                         onLocalGoal()
-                    } else if (ballPosition.y + ballRadius >= size.height - goalHeight - goalOffset) {
+                        isBallInLocalGoal = true
+                    } else if (!isBallInLocal) {
+                        isBallInLocalGoal = false
+                    }
+
+                    if (isBallInVisitante && !isBallInVisitanteGoal) {
                         onVisitanteGoal()
+                        isBallInVisitanteGoal = true
+                    } else if (!isBallInVisitante) {
+                        isBallInVisitanteGoal = false
                     }
 
                     // Dibujar la pelota
                     drawCircle(
-                        color = Color.Blue,
-                        radius = ballRadius, // Pelota de tamaño 7.dp
+                        color = Color(0.906f, 0.275f, 0.843f, 1.0f),
+                        radius = ballRadius,
                         center = ballPosition
                     )
                 }
