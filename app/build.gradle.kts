@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.futbilito"
+    namespace = "com.robertolopezaguilera.futbilito"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.futbilito"
+        applicationId = "com.robertolopezaguilera.futbilito"
         minSdk = 28
         targetSdk = 35
         versionCode = 1
@@ -64,6 +64,12 @@ dependencies {
     kapt("androidx.room:room-compiler:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
 
+    // Compose Navigation
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+
+    // Lifecycle
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
+
     //AdMob
-    implementation("com.google.android.gms:play-services-ads:24.4.0")
+    //implementation("com.google.android.gms:play-services-ads:24.4.0")
 }
