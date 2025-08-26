@@ -35,7 +35,10 @@ data class Item(
     val nivelId: Int,
     val coordenadaX: Int,
     val coordenadaY: Int
-)
+){
+    constructor(coordenadaX: Int,coordenadaY: Int,nivelId: Int =1):
+            this(id = 0,nivelId,coordenadaX,coordenadaY)
+}
 
 @Entity(
     tableName = "obstaculos",

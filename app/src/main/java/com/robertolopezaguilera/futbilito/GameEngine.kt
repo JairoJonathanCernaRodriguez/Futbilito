@@ -11,8 +11,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 class GameEngine(
-    private val borderObstacles: List<GameObstacle>,
-    private val obstacles: List<Obstaculo>,
+    val borderObstacles: List<GameObstacle>,   // 👈 ya todos GameObstacle
+    val obstacles: List<GameObstacle>,         // 👈 convertidos antes de entrar
     private val itemsFromDb: List<Item>,
     spawnPoint: Offset,
     private val onCoinCollected: (() -> Unit)? = null,
@@ -32,11 +32,12 @@ class GameEngine(
 
     fun loadLevel() {
         val ballRadius = 20f
-        val allObstacles = borderObstacles + obstacles.map { it.toGameObstacle() }
+        val allObstacles = borderObstacles + obstacles
 
         var startX = spawnPoint.x
         var startY = spawnPoint.y
         var safeSpawnFound = false
+
         for (i in 0..100) {
             if (!checkCollision(startX, startY, ballRadius, allObstacles)) {
                 safeSpawnFound = true
@@ -61,8 +62,8 @@ class GameEngine(
         val accelerationFactor = 0.5f
         val maxSpeed = 20f
 
-        velocityX += ax * accelerationFactor       // corregido
-        velocityY += ay * accelerationFactor      // invertido Y
+        velocityX += ax * accelerationFactor
+        velocityY += ay * accelerationFactor
 
         velocityX = max(-maxSpeed, min(maxSpeed, velocityX))
         velocityY = max(-maxSpeed, min(maxSpeed, velocityY))
@@ -75,45 +76,30 @@ class GameEngine(
 
     private fun handleMovementWithCollision() {
         val ballRadius = 16f
-        val allObstacles = borderObstacles + obstacles.map { it.toGameObstacle() }
+        val allObstacles = borderObstacles + obstacles
 
         var newX = x + velocityX
         var newY = y + velocityY
 
-        val minX = -450f + ballRadius
-        val maxX = 450f - ballRadius
-        val minY = -600f + ballRadius
-        val maxY = 600f - ballRadius
-
-        // Limites de la pantalla
-        if (newX < minX) { newX = minX; velocityX = -velocityX }
-        else if (newX > maxX) { newX = maxX; velocityX = -velocityX }
-
-        if (newY < minY) { newY = minY; velocityY = -velocityY }
-        else if (newY > maxY) { newY = maxY; velocityY = -velocityY }
-
         // --- COLISIONES CON OBSTÁCULOS ---
         var collided = false
 
-        // Primero probamos mover en X
+        // Mover en X
         if (!checkCollision(newX, y, ballRadius, allObstacles)) {
             x = newX
         } else {
-            // Rebota en X
             velocityX = -velocityX * 0.8f
             collided = true
         }
 
-        // Luego probamos mover en Y
+        // Mover en Y
         if (!checkCollision(x, newY, ballRadius, allObstacles)) {
             y = newY
         } else {
-            // Rebota en Y
             velocityY = -velocityY * 0.8f
             collided = true
         }
 
-        // Si colisionó, damos un pequeño empujón para que no quede enganchada
         if (collided) {
             x += velocityX * 0.1f
             y += velocityY * 0.1f
@@ -123,7 +109,6 @@ class GameEngine(
         velocityX *= 0.90f
         velocityY *= 0.90f
     }
-
 
     private fun checkCollision(x: Float, y: Float, radius: Float, obstacles: List<GameObstacle>): Boolean {
         return obstacles.any { obstacle ->
@@ -151,9 +136,10 @@ class GameEngine(
 }
 
 data class GameObstacle(val x: Float, val y: Float, val width: Float, val height: Float)
-data class GameItem(val x: Float, val y: Float, val radius: Float = 10f, var collected: Boolean = false)
+data class GameItem(val x: Float, val y: Float, val radius: Float = 40f, var collected: Boolean = false)
 
-fun Obstaculo.toGameObstacle() =
+// 🔹 Extensiones para transformar DB → objetos del juego
+fun com.robertolopezaguilera.futbilito.data.Obstaculo.toGameObstacle() =
     GameObstacle(coordenadaX.toFloat(), coordenadaY.toFloat(), ancho.toFloat(), largo.toFloat())
 
 fun Item.toGameItem() =

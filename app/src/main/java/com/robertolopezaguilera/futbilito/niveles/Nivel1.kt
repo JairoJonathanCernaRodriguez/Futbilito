@@ -55,10 +55,10 @@ val obstaclesNivel1 = listOf(
 //    Obstaculo(coordenadaX = -250, -400, 100, 40,1),//-
 )
 
-//val itemsNivel1 = listOf(
-//    Item(coordenadaX = -350, coordenadaY = -540, nivelId = 1),
-//    Item(-150, -300),
-//    Item(-40, -200),
+val itemsNivel1 = listOf(
+    Item(coordenadaX = -350, coordenadaY = -540, nivelId = 1),
+    Item(-150, -300, 1),
+    Item(-40, -200, 2),
 //    Item(180, -100),
 //    Item(300, 40),
 //    Item(-280, 150),
@@ -67,4 +67,4 @@ val obstaclesNivel1 = listOf(
 //    Item(380, 450),
 //    Item(0, 470),
 //    Item(210, -300)
-//)
+)

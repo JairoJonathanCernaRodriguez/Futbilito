@@ -24,11 +24,15 @@ interface NivelDao {
     @Update
     suspend fun updateNivel(nivel: Nivel)
 
+    @Query("UPDATE niveles SET puntuacion = :puntuacion WHERE id = :nivelId")
+    suspend fun actualizarPuntuacion(nivelId: Int, puntuacion: Int)
+
     @Delete
     suspend fun deleteNivel(nivel: Nivel)
 
     @Query("SELECT * FROM niveles WHERE dificultad = :categoria ORDER BY id ASC")
     fun getNivelesPorCategoria(categoria: String): Flow<List<Nivel>>
+
 
 }
 

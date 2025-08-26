@@ -43,7 +43,8 @@ fun NivelesScreen(
                         }
                 ) {
                     Text(
-                        text = "Nivel ${nivel.id} - Tiempo: ${nivel.tiempo}s",
+                        text = "Nivel ${nivel.id} - Tiempo: ${nivel.tiempo}s - Puntuacion:" +
+                                " ${nivel.puntuacion}",
                         modifier = Modifier.padding(16.dp)
                     )
                 }

@@ -69,6 +69,12 @@ class GameViewModel(private val db: GameDatabase) : ViewModel() {
             }
         }
     }
+
+    fun actualizarPuntuacion(nivelId: Int, puntuacion: Int) {
+        viewModelScope.launch {
+            db.nivelDao().actualizarPuntuacion(nivelId, puntuacion)
+        }
+    }
 }
 
 
