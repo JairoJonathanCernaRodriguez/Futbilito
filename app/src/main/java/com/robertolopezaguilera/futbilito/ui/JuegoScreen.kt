@@ -59,7 +59,15 @@ fun JuegoScreen(
         Obstaculo(nivelId = nivelId, coordenadaX = 500,  coordenadaY = -600, ancho = 20,  largo = 1200)
     )
 
-    val tiempoRestante = remember { mutableStateOf(nivel?.tiempo ?: 60) }
+    // Estado del tiempo
+    val tiempoRestante = remember { mutableStateOf(60) }
+
+    // Actualiza el tiempo inicial cuando llega el nivel
+    LaunchedEffect(nivel) {
+        nivel?.let {
+            tiempoRestante.value = it.tiempo
+        }
+    }
 
     MazeGame(
         nivel = nivel,

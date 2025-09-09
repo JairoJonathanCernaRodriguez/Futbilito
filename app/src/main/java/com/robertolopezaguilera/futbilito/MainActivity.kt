@@ -19,7 +19,9 @@ import androidx.lifecycle.lifecycleScope
 import com.robertolopezaguilera.futbilito.data.*
 import com.robertolopezaguilera.futbilito.ui.AppNavigation
 import com.robertolopezaguilera.utbilito.niveles.itemsNivel1
+import com.robertolopezaguilera.utbilito.niveles.itemsNivel2
 import com.robertolopezaguilera.utbilito.niveles.obstaclesNivel1
+import com.robertolopezaguilera.utbilito.niveles.obstaclesNivel2
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -71,8 +73,10 @@ class MainActivity : ComponentActivity() {
 
                 val daoItems = db.itemDao()
                 daoItems.insertListItem(itemsNivel1)
+                daoItems.insertListItem(itemsNivel2)
                 val daoObstaculos = db.obstaculoDao()
                 daoObstaculos.insertListObstculo(obstaclesNivel1)
+                daoObstaculos.insertListObstculo(obstaclesNivel2)
             }
         }
     }

@@ -52,7 +52,7 @@ fun MazeGame(
     val coinPainter = painterResource(id = R.drawable.ic_coin)
 
     // Tiempo inicial del nivel (evita dividir entre 0)
-    val tiempoInicial = remember { kotlin.math.max(1, tiempoRestante.value) }
+    val tiempoInicial = nivel?.tiempo ?: 60
 
     // Estado local para evitar guardar varias veces
     var puntuacionLocal by remember { mutableStateOf<Int?>(null) }
