@@ -1,9 +1,6 @@
 package com.robertolopezaguilera.futbilito
 
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,10 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.robertolopezaguilera.futbilito.data.*
 import com.robertolopezaguilera.futbilito.ui.AppNavigation
-import com.robertolopezaguilera.utbilito.niveles.itemsNivel1
-import com.robertolopezaguilera.utbilito.niveles.itemsNivel2
-import com.robertolopezaguilera.utbilito.niveles.obstaclesNivel1
-import com.robertolopezaguilera.utbilito.niveles.obstaclesNivel2
+import com.robertolopezaguilera.utbilito.niveles.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -72,11 +66,21 @@ class MainActivity : ComponentActivity() {
                 dao.insertNiveles(niveles)
 
                 val daoItems = db.itemDao()
+                //Tutorial
                 daoItems.insertListItem(itemsNivel1)
                 daoItems.insertListItem(itemsNivel2)
+                daoItems.insertListItem(itemsNivel3)
+                daoItems.insertListItem(itemsNivel4)
+                //Principiate
+
+
+                //Dificil
+
                 val daoObstaculos = db.obstaculoDao()
                 daoObstaculos.insertListObstculo(obstaclesNivel1)
                 daoObstaculos.insertListObstculo(obstaclesNivel2)
+                daoObstaculos.insertListObstculo(obstaclesNivel3)
+                daoObstaculos.insertListObstculo(obstaclesNivel4)
             }
         }
     }

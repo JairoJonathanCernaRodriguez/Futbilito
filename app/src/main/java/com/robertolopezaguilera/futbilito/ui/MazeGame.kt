@@ -29,16 +29,18 @@ import com.robertolopezaguilera.futbilito.GameObstacle
 import com.robertolopezaguilera.futbilito.GameState
 import com.robertolopezaguilera.futbilito.MainActivity
 import com.robertolopezaguilera.futbilito.R
+import com.robertolopezaguilera.futbilito.data.Item
 import com.robertolopezaguilera.futbilito.data.Nivel
+import com.robertolopezaguilera.futbilito.data.Obstaculo
 import com.robertolopezaguilera.futbilito.toGameObstacle
 import kotlin.math.max
 
 @Composable
 fun MazeGame(
     nivel: Nivel?,
-    itemsFromDb: List<com.robertolopezaguilera.futbilito.data.Item>,
-    borderObstacles: List<com.robertolopezaguilera.futbilito.data.Obstaculo>,
-    obstaclesFromDb: List<com.robertolopezaguilera.futbilito.data.Obstaculo>,
+    itemsFromDb: List<Item>,
+    borderObstacles: List<Obstaculo>,
+    obstaclesFromDb: List<Obstaculo>,
     tiempoRestante: MutableState<Int>,
     onTimeOut: () -> Unit,
     onRestart: () -> Unit,
@@ -81,7 +83,6 @@ fun MazeGame(
         if (total > 0 && collectedCount == total && puntuacionLocal == null) {
             val porcentajeRestante = (tiempoRestante.value.toFloat() / tiempoInicial.toFloat()) * 100f
             val score = when {
-                porcentajeRestante >= 40f -> 5
                 porcentajeRestante >= 30f -> 4
                 porcentajeRestante >= 20f -> 3
                 porcentajeRestante >= 10f -> 2
@@ -188,12 +189,12 @@ fun MazeGame(
             }
         }
 
-        // Overlays
+        // Overlays - CORREGIDO: Usando las nuevas funciones específicas
         when (gameEngine.gameState) {
             GameState.LEVEL_COMPLETE -> {
                 val scoreShown = puntuacionLocal ?: 0
-                OverlayMessage(
-                    message = "¡Nivel Completado!\nPuntuación: $scoreShown/5",
+                LevelCompletedOverlay(
+                    starsEarned = scoreShown,
                     onRestart = onRestart,
                     onGoToNiveles = {
                         // Vuelve a la lista de niveles (estaba debajo en el back stack)
@@ -206,8 +207,7 @@ fun MazeGame(
                         }
                         context.startActivity(intent)
                         activity?.finish()
-                    }
-                    ,
+                    },
                     onNextLevel = {
                         val nextNivelId = (nivel?.id ?: 0) + 1
                         val intent = Intent(context, GameActivity::class.java).apply {
@@ -215,12 +215,13 @@ fun MazeGame(
                         }
                         context.startActivity(intent)
                         activity?.finish()
-                    }
+                    },
+                    message = ""
                 )
             }
 
             GameState.GAME_OVER -> {
-                OverlayMessage(
+                TimeUpOverlay(
                     message = "¡Tiempo terminado!",
                     onRestart = onRestart,
                     onGoToNiveles = {

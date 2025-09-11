@@ -1,5 +1,7 @@
 package com.robertolopezaguilera.futbilito.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -31,8 +34,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,11 +45,11 @@ import androidx.compose.ui.unit.sp
 import com.robertolopezaguilera.futbilito.viewmodel.NivelViewModel
 
 // Definir colores para cada categoría
-val tutorialColor = listOf(Color(0xFF4CAF50), Color(0xFF8BC34A))
-val principianteColor = listOf(Color(0xFF2196F3), Color(0xFF03A9F4))
-val medioColor = listOf(Color(0xFFFF9800), Color(0xFFFFC107))
-val avanzadoColor = listOf(Color(0xFFF44336), Color(0xFFE91E63))
-val expertoColor = listOf(Color(0xFF9C27B0), Color(0xFF673AB7))
+val tutorialColor = listOf(Color(0xFF4CAF50), Color(0xFF2E7D32))
+val principianteColor = listOf(Color(0xFF2196F3), Color(0xFF1976D2))
+val medioColor = listOf(Color(0xFFFF9800), Color(0xFFF57C00))
+val avanzadoColor = listOf(Color(0xFFF44336), Color(0xFFD32F2F))
+val expertoColor = listOf(Color(0xFF9C27B0), Color(0xFF7B1FA2))
 
 @Composable
 fun CategoriasScreen(
@@ -59,9 +64,9 @@ fun CategoriasScreen(
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF1A237E),
-                        Color(0xFF283593),
-                        Color(0xFF303F9F)
+                        Color(0xFF0D1B4A),
+                        Color(0xFF172B6F),
+                        Color(0xFF233A89)
                     )
                 )
             )
@@ -73,25 +78,51 @@ fun CategoriasScreen(
         ) {
             Text(
                 text = "Selecciona una Dificultad",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineLarge,
                 color = Color.White,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier
                     .padding(vertical = 24.dp)
                     .align(Alignment.CenterHorizontally)
             )
 
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 items(categorias) { categoria ->
-                    CategoriaCard(
+                    AnimatedCategoriaCard(
                         categoria = categoria,
                         onCategoriaClick = onCategoriaClick
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+fun AnimatedCategoriaCard(
+    categoria: CategoriaConProgreso,
+    onCategoriaClick: (String) -> Unit
+) {
+    val scale by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = spring(
+            dampingRatio = 0.6f,
+            stiffness = 300f
+        ),
+        label = "cardAnimation"
+    )
+
+    Box(
+        modifier = Modifier
+            .scale(scale)
+            .padding(horizontal = 8.dp)
+    ) {
+        CategoriaCard(
+            categoria = categoria,
+            onCategoriaClick = onCategoriaClick
+        )
     }
 }
 
@@ -120,7 +151,7 @@ fun CategoriaCard(
                 enabled = !isLocked,
                 onClick = { onCategoriaClick(categoria.dificultad) }
             ),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.Transparent
@@ -129,114 +160,227 @@ fun CategoriaCard(
         Box(
             modifier = Modifier
                 .background(
-                    brush = Brush.horizontalGradient(colors),
-                    shape = RoundedCornerShape(16.dp)
+                    brush = Brush.verticalGradient(colors),
+                    shape = RoundedCornerShape(20.dp)
                 )
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(20.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = categoria.dificultad,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    if (isLocked) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "Bloqueado",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    } else if (categoria.progreso >= 1f) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Completado",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.ArrowForward,
-                            contentDescription = "Jugar",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Niveles: ${categoria.totalNiveles}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White
-                    )
-
-                    Text(
-                        text = "${categoria.puntosObtenidos}/${categoria.puntosTotales} pts",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White
-                    )
-                }
+                // Header con icono y título
+                CategoryHeader(
+                    categoria = categoria,
+                    isLocked = isLocked,
+                    colors = colors
+                )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Barra de progreso con color dinámico
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(12.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color.White.copy(alpha = 0.3f))
-                ) {
-                    LinearProgressIndicator(
-                        progress = { categoria.progreso },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(12.dp)
-                            .clip(RoundedCornerShape(10.dp)),
-                        color = if (categoria.progreso >= 1f) Color(0xFF00E676) else Color.White,
-                        trackColor = Color.Transparent
-                    )
-                }
+                // Información de progreso
+                ProgressInfo(
+                    categoria = categoria,
+                    isLocked = isLocked
+                )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = if (isLocked) "Completa la anterior" else "${(categoria.progreso * 100).toInt()}% completado",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White
-                    )
+                // Barra de progreso
+                ProgressBar(
+                    progress = categoria.progreso,
+                    isLocked = isLocked
+                )
 
-                    Text(
-                        text = "${(categoria.progreso * 100).toInt()}%",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Porcentaje de completado
+                ProgressPercentage(
+                    progress = categoria.progreso,
+                    isLocked = isLocked
+                )
             }
+        }
+    }
+}
+
+@Composable
+fun CategoryHeader(
+    categoria: CategoriaConProgreso,
+    isLocked: Boolean,
+    colors: List<Color>
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Título con icono de dificultad
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        color = colors[0].copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(10.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                val icon: ImageVector = when (categoria.dificultad) {
+                    "Tutorial" -> Icons.Filled.Star
+                    "Principiante" -> Icons.Filled.Star
+                    "Medio" -> Icons.Filled.Star
+                    "Avanzado" -> Icons.Filled.Star
+                    "Experto" -> Icons.Filled.Star
+                    else -> Icons.Filled.Star
+                }
+
+                Icon(
+                    imageVector = icon,
+                    contentDescription = "Dificultad",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Text(
+                text = categoria.dificultad,
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        // Icono de estado
+        if (isLocked) {
+            Icon(
+                imageVector = Icons.Default.Lock,
+                contentDescription = "Bloqueado",
+                tint = Color.White.copy(alpha = 0.8f),
+                modifier = Modifier.size(24.dp)
+            )
+        } else if (categoria.progreso >= 1f) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = "Completado",
+                tint = Color(0xFF00E676),
+                modifier = Modifier.size(24.dp)
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.ArrowForward,
+                contentDescription = "Jugar",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun ProgressInfo(
+    categoria: CategoriaConProgreso,
+    isLocked: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        // Niveles
+        InfoItem(
+            label = "Niveles",
+            value = categoria.totalNiveles.toString(),
+            isLocked = isLocked
+        )
+
+        // Puntos (ahora basado en 0-4 estrellas por nivel)
+        InfoItem(
+            label = "Estrellas",
+            value = "${categoria.puntosObtenidos}/${categoria.puntosTotales}",
+            isLocked = isLocked
+        )
+
+        // Niveles completados
+        val nivelesCompletados = (categoria.totalNiveles * categoria.progreso).toInt()
+        InfoItem(
+            label = "Completados",
+            value = "$nivelesCompletados/${categoria.totalNiveles}",
+            isLocked = isLocked
+        )
+    }
+}
+
+@Composable
+fun InfoItem(label: String, value: String, isLocked: Boolean) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (isLocked) Color.White.copy(alpha = 0.6f) else Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isLocked) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.8f),
+            fontSize = 10.sp
+        )
+    }
+}
+
+@Composable
+fun ProgressBar(progress: Float, isLocked: Boolean) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(14.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.2f))
+    ) {
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(14.dp)
+                .clip(RoundedCornerShape(10.dp)),
+            color = when {
+                isLocked -> Color.Gray.copy(alpha = 0.5f)
+                progress >= 1f -> Color(0xFF00E676)
+                else -> Color.White
+            },
+            trackColor = Color.Transparent
+        )
+    }
+}
+
+@Composable
+fun ProgressPercentage(progress: Float, isLocked: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = if (isLocked) "Completa la categoría anterior" else "Progreso general",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isLocked) Color.White.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.8f),
+            fontSize = 12.sp
+        )
+
+        if (!isLocked) {
+            Text(
+                text = "${(progress * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            )
         }
     }
 }
@@ -244,8 +388,8 @@ fun CategoriaCard(
 data class CategoriaConProgreso(
     val dificultad: String,
     val totalNiveles: Int,
-    val puntosObtenidos: Int,
-    val puntosTotales: Int
+    val puntosObtenidos: Int,  // Ahora basado en 0-4 estrellas por nivel
+    val puntosTotales: Int     // totalNiveles * 4 (máximo de estrellas por nivel)
 ) {
     val progreso: Float
         get() = if (puntosTotales > 0) puntosObtenidos.toFloat() / puntosTotales else 0f

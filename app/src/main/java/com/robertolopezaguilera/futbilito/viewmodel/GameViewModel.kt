@@ -87,7 +87,7 @@ class NivelViewModel(private val dao: NivelDao) : ViewModel() {
                     .groupBy { it.dificultad }
                     .map { (dificultad, nivelesDeCategoria) ->
                         val totalNiveles = nivelesDeCategoria.size
-                        val puntosTotales = totalNiveles * 5
+                        val puntosTotales = totalNiveles * 4
                         val puntosObtenidos = nivelesDeCategoria.sumOf { it.puntuacion }
                         CategoriaConProgreso(
                             dificultad = dificultad,
