@@ -1,6 +1,5 @@
 package com.robertolopezaguilera.futbilito
 
-
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.robertolopezaguilera.futbilito.data.*
+import com.robertolopezaguilera.futbilito.niveles.*
 import com.robertolopezaguilera.futbilito.ui.AppNavigation
 import com.robertolopezaguilera.utbilito.niveles.*
 import kotlinx.coroutines.Dispatchers
@@ -58,11 +58,11 @@ class MainActivity : ComponentActivity() {
             if (dao.getAllNiveles().isEmpty()) {
                 val niveles = mutableListOf<Nivel>()
                 var id = 1
-                repeat(10) { niveles.add(Nivel(id++, 45, 0, "Tutorial")) }
-                repeat(30) { niveles.add(Nivel(id++, 45, 0, "Principiante")) }
-                repeat(30) { niveles.add(Nivel(id++, 45, 0, "Medio")) }
-                repeat(20) { niveles.add(Nivel(id++, 45, 0, "Avanzado")) }
-                repeat(10) { niveles.add(Nivel(id++, 45, 0, "Experto")) }
+                repeat(10) { niveles.add(Nivel(id++, 60, 0, "Tutorial")) }
+                repeat(30) { niveles.add(Nivel(id++, 60, 0, "Principiante")) }
+                repeat(30) { niveles.add(Nivel(id++, 60, 0, "Medio")) }
+                repeat(20) { niveles.add(Nivel(id++, 60, 0, "Avanzado")) }
+                repeat(10) { niveles.add(Nivel(id++, 60, 0, "Experto")) }
                 dao.insertNiveles(niveles)
 
                 val daoItems = db.itemDao()
@@ -71,16 +71,38 @@ class MainActivity : ComponentActivity() {
                 daoItems.insertListItem(itemsNivel2)
                 daoItems.insertListItem(itemsNivel3)
                 daoItems.insertListItem(itemsNivel4)
-                //Principiate
-
-
-                //Dificil
-
+                daoItems.insertListItem(itemsNivel5)
+                daoItems.insertListItem(itemsNivel6)
+                daoItems.insertListItem(itemsNivel7)
+                daoItems.insertListItem(itemsNivel8)
+                daoItems.insertListItem(itemsNivel9)
+                daoItems.insertListItem(itemsNivel10)
+                //
                 val daoObstaculos = db.obstaculoDao()
                 daoObstaculos.insertListObstculo(obstaclesNivel1)
                 daoObstaculos.insertListObstculo(obstaclesNivel2)
                 daoObstaculos.insertListObstculo(obstaclesNivel3)
                 daoObstaculos.insertListObstculo(obstaclesNivel4)
+                daoObstaculos.insertListObstculo(obstaclesNivel5)
+                daoObstaculos.insertListObstculo(obstaclesNivel6)
+                daoObstaculos.insertListObstculo(obstaclesNivel7)
+                daoObstaculos.insertListObstculo(obstaclesNivel8)
+                daoObstaculos.insertListObstculo(obstaclesNivel9)
+                daoObstaculos.insertListObstculo(obstaclesNivel10)
+                //Principiate
+
+                daoItems.insertListItem(itemsNivel11)
+                daoItems.insertListItem(itemsNivel12)
+                daoItems.insertListItem(itemsNivel13)
+                daoItems.insertListItem(itemsNivel14)
+                //
+                daoObstaculos.insertListObstculo(obstaclesNivel11)
+                daoObstaculos.insertListObstculo(obstaclesNivel12)
+                daoObstaculos.insertListObstculo(obstaclesNivel13)
+                daoObstaculos.insertListObstculo(obstaclesNivel14)
+                //Dificil
+
+
             }
         }
     }

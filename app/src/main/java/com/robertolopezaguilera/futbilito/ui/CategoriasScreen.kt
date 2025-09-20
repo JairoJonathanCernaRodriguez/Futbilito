@@ -141,8 +141,8 @@ fun CategoriaCard(
         else -> listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
     }
 
-    // Verificar si la categoría está bloqueada (progreso 0% y no es Tutorial)
-    val isLocked = categoria.progreso == 0f && categoria.dificultad != "Tutorial"
+    // 👇 CAMBIO IMPORTANTE: Usar el nuevo campo isUnlocked del ViewModel
+    val isLocked = !categoria.isUnlocked
 
     Card(
         modifier = Modifier
@@ -160,7 +160,11 @@ fun CategoriaCard(
         Box(
             modifier = Modifier
                 .background(
-                    brush = Brush.verticalGradient(colors),
+                    // 👇 Cambiar el color de fondo si está bloqueada
+                    brush = if (isLocked)
+                        Brush.verticalGradient(listOf(Color.Gray.copy(alpha = 0.7f), Color.DarkGray.copy(alpha = 0.7f)))
+                    else
+                        Brush.verticalGradient(colors),
                     shape = RoundedCornerShape(20.dp)
                 )
         ) {
@@ -173,7 +177,7 @@ fun CategoriaCard(
                 CategoryHeader(
                     categoria = categoria,
                     isLocked = isLocked,
-                    colors = colors
+                    colors = if (isLocked) listOf(Color.Gray, Color.DarkGray) else colors
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -194,10 +198,11 @@ fun CategoriaCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Porcentaje de completado
+                // 👇 Porcentaje de completado con mensaje mejorado
                 ProgressPercentage(
                     progress = categoria.progreso,
-                    isLocked = isLocked
+                    isLocked = isLocked,
+                    categoria = categoria // 👈 Pasar la categoría completa
                 )
             }
         }
@@ -224,24 +229,32 @@ fun CategoryHeader(
                 modifier = Modifier
                     .size(40.dp)
                     .background(
-                        color = colors[0].copy(alpha = 0.3f),
+                        // 👇 Cambiar color del icono si está bloqueado
+                        color = if (isLocked)
+                            Color.Gray.copy(alpha = 0.5f)
+                        else
+                            colors[0].copy(alpha = 0.3f),
                         shape = RoundedCornerShape(10.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                val icon: ImageVector = when (categoria.dificultad) {
-                    "Tutorial" -> Icons.Filled.Star
-                    "Principiante" -> Icons.Filled.Star
-                    "Medio" -> Icons.Filled.Star
-                    "Avanzado" -> Icons.Filled.Star
-                    "Experto" -> Icons.Filled.Star
-                    else -> Icons.Filled.Star
+                val icon: ImageVector = if (isLocked) {
+                    Icons.Default.Lock // 👈 Icono de candado para categorías bloqueadas
+                } else {
+                    when (categoria.dificultad) {
+                        "Tutorial" -> Icons.Filled.Star
+                        "Principiante" -> Icons.Filled.Star
+                        "Medio" -> Icons.Filled.Star
+                        "Avanzado" -> Icons.Filled.Star
+                        "Experto" -> Icons.Filled.Star
+                        else -> Icons.Filled.Star
+                    }
                 }
 
                 Icon(
                     imageVector = icon,
-                    contentDescription = "Dificultad",
-                    tint = Color.White,
+                    contentDescription = if (isLocked) "Bloqueado" else "Dificultad",
+                    tint = if (isLocked) Color.White.copy(alpha = 0.7f) else Color.White,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -249,7 +262,7 @@ fun CategoryHeader(
             Text(
                 text = categoria.dificultad,
                 style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
+                color = if (isLocked) Color.White.copy(alpha = 0.7f) else Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 22.sp,
                 maxLines = 1,
@@ -360,14 +373,26 @@ fun ProgressBar(progress: Float, isLocked: Boolean) {
     }
 }
 
+// 👇 FUNCIÓN ACTUALIZADA: Ahora recibe la categoría completa
 @Composable
-fun ProgressPercentage(progress: Float, isLocked: Boolean) {
+fun ProgressPercentage(progress: Float, isLocked: Boolean, categoria: CategoriaConProgreso) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            text = if (isLocked) "Completa la categoría anterior" else "Progreso general",
+            text = if (isLocked) {
+                // 👇 Mensaje específico para categorías bloqueadas
+                when (categoria.dificultad) {
+                    "Principiante" -> "Completa 50% del Tutorial"
+                    "Medio" -> "Completa 50% de Principiante"
+                    "Avanzado" -> "Completa 50% de Medio"
+                    "Experto" -> "Completa 50% de Avanzado"
+                    else -> "Completa la categoría anterior"
+                }
+            } else {
+                "Progreso general"
+            },
             style = MaterialTheme.typography.bodySmall,
             color = if (isLocked) Color.White.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.8f),
             fontSize = 12.sp
@@ -388,8 +413,9 @@ fun ProgressPercentage(progress: Float, isLocked: Boolean) {
 data class CategoriaConProgreso(
     val dificultad: String,
     val totalNiveles: Int,
-    val puntosObtenidos: Int,  // Ahora basado en 0-4 estrellas por nivel
-    val puntosTotales: Int     // totalNiveles * 4 (máximo de estrellas por nivel)
+    val puntosObtenidos: Int,
+    val puntosTotales: Int,
+    val isUnlocked: Boolean = true // 👈 Campo para el desbloqueo
 ) {
     val progreso: Float
         get() = if (puntosTotales > 0) puntosObtenidos.toFloat() / puntosTotales else 0f

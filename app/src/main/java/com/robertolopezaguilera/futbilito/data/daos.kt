@@ -45,6 +45,9 @@ interface UsuarioDao {
     @Update
     suspend fun updateUsuario(usuario: Usuario)
 
+    @Query("UPDATE usuarios SET monedas = :monedas WHERE id = 1")
+    suspend fun actualizarMonedas(monedas: Int)
+
     @Delete
     suspend fun deleteUsuario(usuario: Usuario)
 

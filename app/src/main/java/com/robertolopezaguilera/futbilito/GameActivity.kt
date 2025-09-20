@@ -7,11 +7,14 @@ import android.hardware.SensorManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.robertolopezaguilera.futbilito.data.GameDatabase
 import com.robertolopezaguilera.futbilito.ui.JuegoScreen
+import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
+import com.robertolopezaguilera.futbilito.viewmodel.GameViewModelFactory
 
 class GameActivity : ComponentActivity(), SensorEventListener {
 
@@ -23,6 +26,11 @@ class GameActivity : ComponentActivity(), SensorEventListener {
 
     private lateinit var db: GameDatabase
 
+    // 👇 Crear el ViewModel usando viewModels delegate
+    private val gameViewModel: GameViewModel by viewModels {
+        GameViewModelFactory(GameDatabase.getDatabase(this))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -33,6 +41,7 @@ class GameActivity : ComponentActivity(), SensorEventListener {
 
         sensorManager = getSystemService(SensorManager::class.java)
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+
 
         setContent {
             JuegoScreen(
@@ -46,7 +55,8 @@ class GameActivity : ComponentActivity(), SensorEventListener {
                     startActivity(intent)
                 },
                 tiltX = tiltX,
-                tiltY = tiltY
+                tiltY = tiltY,
+                gameViewModel = gameViewModel // 👈 Pasar el ViewModel
             )
         }
     }

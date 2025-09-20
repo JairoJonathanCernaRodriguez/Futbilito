@@ -1,23 +1,17 @@
 package com.robertolopezaguilera.futbilito.ui
 
-import android.media.MediaPlayer
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
-import com.robertolopezaguilera.futbilito.GameEngine
-import com.robertolopezaguilera.futbilito.GameState
-import com.robertolopezaguilera.futbilito.R
 import com.robertolopezaguilera.futbilito.data.GameDatabase
 import com.robertolopezaguilera.futbilito.data.ItemDao
-import com.robertolopezaguilera.futbilito.data.Nivel
 import com.robertolopezaguilera.futbilito.data.NivelDao
-import com.robertolopezaguilera.futbilito.data.Obstaculo
 import com.robertolopezaguilera.futbilito.data.ObstaculoDao
-import com.robertolopezaguilera.futbilito.toGameObstacle
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun JuegoScreen(
@@ -27,42 +21,53 @@ fun JuegoScreen(
     nivelDao: NivelDao,
     onRestartNivel: () -> Unit,
     tiltX: Float,
-    tiltY: Float
+    tiltY: Float,
+    gameViewModel: GameViewModel // 👈 Recibir el ViewModel desde fuera
 ) {
     val context = LocalContext.current
+    var isLoading by remember { mutableStateOf(true) }
 
-    // ViewModel para actualizar puntuación
-    val gameViewModel: GameViewModel = viewModel(
-        factory = object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                if (modelClass.isAssignableFrom(GameViewModel::class.java)) {
-                    @Suppress("UNCHECKED_CAST")
-                    return GameViewModel(GameDatabase.getDatabase(context)) as T
-                }
-                throw IllegalArgumentException("Unknown ViewModel class")
-            }
+    // 👇 Cargar nivel de forma asíncrona (no es Flow)
+    val nivelState = produceState<com.robertolopezaguilera.futbilito.data.Nivel?>(initialValue = null, key1 = nivelId) {
+        value = withContext(Dispatchers.IO) {
+            nivelDao.getNivel(nivelId)
         }
-    )
-
-    val nivelState = produceState<Nivel?>(initialValue = null, key1 = nivelId) {
-        value = nivelDao.getNivel(nivelId)
     }
-    val nivel = nivelState.value
 
+    // 👇 Usar collectAsState() para los Flows
     val items by itemDao.getItemsByNivel(nivelId).collectAsState(initial = emptyList())
     val obstaculos by obstaculoDao.getObstaculosByNivel(nivelId).collectAsState(initial = emptyList())
 
-    val borderObstacles = listOf(
-        Obstaculo(nivelId = nivelId, coordenadaX = -500, coordenadaY = -600, ancho = 1000, largo = 20),
-        Obstaculo(nivelId = nivelId, coordenadaX = -500, coordenadaY = 580,  ancho = 1000, largo = 20),
-        Obstaculo(nivelId = nivelId, coordenadaX = -500, coordenadaY = -600, ancho = 20,  largo = 1200),
-        Obstaculo(nivelId = nivelId, coordenadaX = 500,  coordenadaY = -600, ancho = 20,  largo = 1200)
-    )
+    // 👇 Verificar si todos los datos están cargados
+    LaunchedEffect(nivelState.value, items, obstaculos) {
+        if (nivelState.value != null) {
+            // Pequeño delay para asegurar que todo esté renderizado
+            kotlinx.coroutines.delay(50)
+            isLoading = false
+        }
+    }
+
+    if (isLoading) {
+        LoadingScreen()
+        return
+    }
+
+    val nivel = nivelState.value
+
+    // 👇 Pre-calcular borderObstacles con remember
+    val borderObstacles = remember(nivelId) {
+        listOf(
+            com.robertolopezaguilera.futbilito.data.Obstaculo(nivelId = nivelId, coordenadaX = -500, coordenadaY = -600, ancho = 1000, largo = 20),
+            com.robertolopezaguilera.futbilito.data.Obstaculo(nivelId = nivelId, coordenadaX = -500, coordenadaY = 580,  ancho = 1000, largo = 20),
+            com.robertolopezaguilera.futbilito.data.Obstaculo(nivelId = nivelId, coordenadaX = -500, coordenadaY = -600, ancho = 20,  largo = 1200),
+            com.robertolopezaguilera.futbilito.data.Obstaculo(nivelId = nivelId, coordenadaX = 500,  coordenadaY = -600, ancho = 20,  largo = 1200)
+        )
+    }
 
     // Estado del tiempo
-    val tiempoRestante = remember { mutableStateOf(60) }
+    val tiempoRestante = remember { mutableStateOf(nivel?.tiempo ?: 60) }
 
-    // Actualiza el tiempo inicial cuando llega el nivel
+    // 👇 Actualiza el tiempo inicial cuando llega el nivel
     LaunchedEffect(nivel) {
         nivel?.let {
             tiempoRestante.value = it.tiempo
@@ -75,7 +80,9 @@ fun JuegoScreen(
         borderObstacles = borderObstacles,
         obstaclesFromDb = obstaculos,
         tiempoRestante = tiempoRestante,
-        onTimeOut = {},
+        onTimeOut = {
+            // Manejar tiempo agotado
+        },
         onRestart = {
             tiempoRestante.value = nivel?.tiempo ?: 60
             onRestartNivel()
@@ -84,6 +91,10 @@ fun JuegoScreen(
         tiltY = tiltY,
         onLevelScored = { score ->
             gameViewModel.actualizarPuntuacion(nivelId, score)
+        },
+        // 👇 NUEVO: Pasar la función para agregar monedas
+        onAddCoins = { coins ->
+            gameViewModel.addMonedas(coins)
         }
     )
 }
