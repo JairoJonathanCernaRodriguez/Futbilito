@@ -1,8 +1,12 @@
 package com.robertolopezaguilera.futbilito.ui
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -57,39 +61,68 @@ fun MazeGame(
     val context = LocalContext.current
     val activity = context as? Activity
 
-    // 👇 Estado de carga
+    // 👇 Estados
     var isLoading by remember { mutableStateOf(true) }
-
-    // 👇 Estado para mostrar animación de monedas
     var showCoinAnimation by remember { mutableStateOf(false) }
     var coinsEarned by remember { mutableStateOf(0) }
-
-    // 👇 Estado para animación del cerdo cuando se recolecta un ítem
     var pigAnimationTrigger by remember { mutableStateOf(0) }
 
-    // 👇 Gestión del MediaPlayer
-    // 👇 REEMPLAZAR: MediaPlayer como remember mutableState
-    var coinSound by remember { mutableStateOf<MediaPlayer?>(null) }
+    // 👇 MediaPlayer y Vibrator - CORREGIDO
+    val coinSound = remember {
+        MediaPlayer.create(context, R.raw.coin_sound).apply {
+            setOnCompletionListener { it.seekTo(0) }
+        }
+    }
 
-    LaunchedEffect(Unit) {
-        coinSound = MediaPlayer.create(context, R.raw.coin_sound).apply {
-            setOnCompletionListener {
-                it.seekTo(0) // Resetear al completar
+    val vibrator = remember {
+        context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    }
+
+    // 🔴 Liberar recursos correctamente
+    DisposableEffect(Unit) {
+        onDispose {
+            coinSound.stop()
+            coinSound.release()
+        }
+    }
+
+    // 👇 Función para efectos - CORREGIDA
+    val playCoinEffects = remember {
+        {
+            try {
+                println("🔊 EJECUTANDO EFECTOS DE SONIDO Y VIBRACIÓN")
+
+                // Sonido
+                if (coinSound.isPlaying) {
+                    coinSound.seekTo(0)
+                }
+                coinSound.start()
+                println("🔊 Sonido iniciado - isPlaying: ${coinSound.isPlaying}")
+
+                // Vibración
+                if (vibrator.hasVibrator()) {
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            vibrator.vibrate(VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            vibrator.vibrate(200)
+                        }
+                        println("📳 Vibración ejecutada")
+                    } catch (vibeException: Exception) {
+                        println("❌ Error en vibración: ${vibeException.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                println("❌ Error general en efectos: ${e.message}")
+                e.printStackTrace()
             }
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            coinSound?.release()
-            coinSound = null
-        }
-    }
-
-    // Cargar recursos de forma asíncrona
+    // Cargar recursos
     LaunchedEffect(nivel?.id) {
         isLoading = true
-        // Pequeña pausa para permitir que la UI se renderice
         delay(100)
         isLoading = false
     }
@@ -100,59 +133,45 @@ fun MazeGame(
     }
 
     val coinPainter = painterResource(id = R.drawable.ic_coin)
-
-    // Tiempo inicial del nivel
     val tiempoInicial = nivel?.tiempo ?: 60
-
-    // Estado local para evitar guardar varias veces
     var puntuacionLocal by remember { mutableStateOf<Int?>(null) }
-
-    // Estado para controlar si el juego está pausado
     var isGamePaused by remember { mutableStateOf(false) }
 
-    // 👇 Optimizar el motor de juego con claves estables
-    val gameEngine = remember(
-        itemsFromDb.hashCode(),
-        obstaclesFromDb.hashCode(),
-        borderObstacles.hashCode(),
-        nivel?.id
-    ) {
+    // 🎮 GameEngine - SOLO depende del nivel ID
+    val gameEngine = remember(nivel?.id) {
+        println("🔄 Creando GameEngine para nivel: ${nivel?.id}")
         GameEngine(
             borderObstacles = borderObstacles.map { it.toGameObstacle() },
             obstacles = obstaclesFromDb.map { it.toGameObstacle() },
             itemsFromDb = itemsFromDb,
-            spawnPoint = Offset(0f, 0f)
-        ) {
-            // 👇 CORREGIR: Reproducir sonido aquí directamente
-            println("🟢 CALLBACK: Item recolectado")
-
-            try {
-                if (coinSound?.isPlaying == true) {
-                    coinSound?.pause()
-                    coinSound?.seekTo(0)
-                }
-                coinSound?.start()
-                println("🔊 Sonido reproducido")
-            } catch (e: Exception) {
-                println("❌ Error reproduciendo sonido: ${e.message}")
-                // Intentar recrear el MediaPlayer si falla
-                coinSound = MediaPlayer.create(context, R.raw.coin_sound)
-                coinSound?.start()
+            spawnPoint = Offset(0f, 0f),
+            onCoinCollected = {
+                println("🎯 Callback recibido en MazeGame")
+                playCoinEffects()
+                pigAnimationTrigger++
             }
-        }
+        )
     }
-    // 👇 Optimizar el sensor update
+
+    // 👇 DEBUG: Verificar items recolectados
+    val collectedCount = gameEngine.items.count { it.collected }
+    LaunchedEffect(collectedCount) {
+        println("📊 Items recolectados: $collectedCount/${gameEngine.items.size}")
+    }
+
+    // 👇 Update con sensor
     LaunchedEffect(tiltX, tiltY) {
         if (!isGamePaused && gameEngine.gameState == GameState.PLAYING) {
             gameEngine.updateWithSensor(tiltX, tiltY)
         }
     }
 
-    // Calcular puntuación al recolectar todos los items
-    val collectedCount = gameEngine.items.count { it.collected }
+    // 👇 Calcular puntuación cuando se recolectan todos los items
     LaunchedEffect(collectedCount) {
         val total = gameEngine.items.size
         if (total > 0 && collectedCount == total && puntuacionLocal == null) {
+            println("🎉 Todos los items recolectados!")
+
             val porcentajeRestante = (tiempoRestante.value.toFloat() / tiempoInicial.toFloat()) * 100f
             val score = when {
                 porcentajeRestante >= 30f -> 4
@@ -160,9 +179,8 @@ fun MazeGame(
                 porcentajeRestante >= 10f -> 2
                 else -> 1
             }
-            val puntuacionActualNivel = nivel?.puntuacion ?: 0
 
-            // 👇 Calcular monedas ganadas según las estrellas
+            val puntuacionActualNivel = nivel?.puntuacion ?: 0
             val coins = when (score) {
                 4 -> 15
                 3 -> 10
@@ -172,17 +190,13 @@ fun MazeGame(
             }
 
             if (score > puntuacionActualNivel) {
-                // 👇 Agregar monedas y mostrar animación
                 onAddCoins(coins)
                 coinsEarned = coins
                 showCoinAnimation = true
-
-                // 👇 Ocultar animación después de 3 segundos
                 delay(3000)
                 showCoinAnimation = false
-
                 puntuacionLocal = score
-                onLevelScored(score) // persistir mejor puntuación
+                onLevelScored(score)
             } else {
                 puntuacionLocal = puntuacionActualNivel
             }
@@ -190,20 +204,16 @@ fun MazeGame(
         }
     }
 
+    // UI (igual que antes)
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Contenedor principal del juego (ocupa todo el espacio disponible)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     drawRect(color = Color(0xFF2E3440), size = size)
                     val originX = size.width / 2f
                     val originY = size.height / 2f
 
-                    // Bordes
+                    // Dibujar obstáculos
                     gameEngine.borderObstacles.forEach { o ->
                         drawRect(
                             color = Color(0xFF5E81AC),
@@ -212,7 +222,6 @@ fun MazeGame(
                         )
                     }
 
-                    // Obstáculos
                     gameEngine.obstacles.forEach { o ->
                         drawRect(
                             color = Color(0xFF5E81AC),
@@ -221,7 +230,7 @@ fun MazeGame(
                         )
                     }
 
-                    // Items (solo si no han sido recolectados)
+                    // Dibujar items no recolectados
                     gameEngine.items.forEach { item ->
                         if (!item.collected) {
                             val itemSize = item.radius * 2
@@ -234,7 +243,7 @@ fun MazeGame(
                         }
                     }
 
-                    // Pelota
+                    // Dibujar pelota
                     drawCircle(
                         color = Color(0xFFBF616A),
                         radius = 16f,
@@ -242,46 +251,33 @@ fun MazeGame(
                     )
                 }
 
-                // BOTÓN DE PAUSA - ARRIBA A LA DERECHA
+                // Resto de tu UI
                 PauseButton(
                     isPaused = isGamePaused,
                     onPauseChange = { paused ->
                         isGamePaused = paused
-                        if (paused) {
-                            gameEngine.pause()
-                        } else {
-                            gameEngine.resume()
-                        }
+                        if (paused) gameEngine.pause() else gameEngine.resume()
                     },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
                 )
 
-                // Cronómetro
                 Cronometro(
                     tiempoRestante = tiempoRestante,
                     isActive = gameEngine.gameState == GameState.PLAYING,
                     isPaused = isGamePaused,
                     onTimeOut = {
                         gameEngine.gameState = GameState.GAME_OVER
-                        onTimeOut() // ← Esto se ejecutará cuando el tiempo llegue a 0
+                        onTimeOut()
                     },
                     onPauseChange = { paused ->
                         isGamePaused = paused
-                        if (paused) {
-                            gameEngine.pause()
-                        } else {
-                            gameEngine.resume()
-                        }
+                        if (paused) gameEngine.pause() else gameEngine.resume()
                     },
                     isOnline = true,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
                 )
 
-                // Overlay info (x/total) con animación de cerdo
+                // Overlay info
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -289,13 +285,8 @@ fun MazeGame(
                         .background(Color.Black.copy(alpha = 0.5f), shape = RoundedCornerShape(8.dp))
                         .padding(8.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // 👇 Cerdo con animación cuando se recolecta un ítem
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         AnimatedPigIcon(trigger = pigAnimationTrigger)
-
                         Text(
                             text = "${collectedCount} / ${gameEngine.items.size}",
                             color = Color.White,
@@ -305,7 +296,6 @@ fun MazeGame(
                     }
                 }
 
-                // 👇 Mostrar animación de monedas si está activa
                 if (showCoinAnimation) {
                     CoinAnimation(
                         coins = coinsEarned,
@@ -313,17 +303,12 @@ fun MazeGame(
                     )
                 }
 
-                // Overlays - CORREGIDO: Usando las nuevas funciones específicas
                 when (gameEngine.gameState) {
                     GameState.LEVEL_COMPLETE -> {
-                        val scoreShown = puntuacionLocal ?: 0
                         LevelCompletedOverlay(
-                            starsEarned = scoreShown,
+                            starsEarned = puntuacionLocal ?: 0,
                             onRestart = onRestart,
-                            onGoToNiveles = {
-                                // Vuelve a la lista de niveles (estaba debajo en el back stack)
-                                activity?.finish()
-                            },
+                            onGoToNiveles = { activity?.finish() },
                             onGoToCategorias = {
                                 val intent = Intent(context, MainActivity::class.java).apply {
                                     putExtra("startDestination", "categorias")
@@ -343,14 +328,11 @@ fun MazeGame(
                             message = ""
                         )
                     }
-
                     GameState.GAME_OVER -> {
                         TimeUpOverlay(
                             message = "¡Tiempo terminado!",
                             onRestart = onRestart,
-                            onGoToNiveles = {
-                                activity?.finish()
-                            },
+                            onGoToNiveles = { activity?.finish() },
                             onGoToCategorias = {
                                 val intent = Intent(context, MainActivity::class.java).apply {
                                     putExtra("startDestination", "categorias")
@@ -369,13 +351,10 @@ fun MazeGame(
                             }
                         )
                     }
-
                     else -> {}
                 }
             }
-
-            // 👇 Banner de anuncios en la parte inferior
-            AdBanner(modifier = Modifier.fillMaxWidth())
+            //AdBanner(modifier = Modifier.fillMaxWidth())
         }
     }
 }

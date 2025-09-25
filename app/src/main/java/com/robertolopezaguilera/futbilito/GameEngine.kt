@@ -5,7 +5,6 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
-import com.robertolopezaguilera.futbilito.data.Obstaculo
 import com.robertolopezaguilera.futbilito.data.Item
 import kotlin.math.max
 import kotlin.math.min
@@ -78,7 +77,7 @@ class GameEngine(
         lastUpdateTime = System.currentTimeMillis()
     }
 
-    private fun findSafeSpawnPoint(ballRadius: Float): Offset {
+     fun findSafeSpawnPoint(ballRadius: Float): Offset {
         // Estrategia 1: Probar el spawn point original
         if (!checkCollision(spawnPoint.x, spawnPoint.y, ballRadius)) {
             return spawnPoint
@@ -164,7 +163,7 @@ class GameEngine(
     }
 
     // 👇 Nueva función para actualizar el temporizador de poderes
-    private fun updatePowerTimer() {
+     fun updatePowerTimer() {
         if (activePower != PowerType.NONE) {
             powerTimer -= 0.016f // Asumiendo ~60 FPS
             if (powerTimer <= 0f) {
@@ -174,7 +173,7 @@ class GameEngine(
     }
 
     // 👇 Nueva función para desactivar el poder actual
-    private fun deactivatePower() {
+     fun deactivatePower() {
         activePower = PowerType.NONE
         powerTimer = 0f
     }
@@ -202,7 +201,7 @@ class GameEngine(
         onPowerActivated?.invoke(PowerType.GHOST_MODE)
     }
 
-    private fun handleMovementWithCollision() {
+     fun handleMovementWithCollision() {
         val ballRadius = 16f
 
         var newX = x + velocityX
@@ -245,7 +244,7 @@ class GameEngine(
     }
 
     // 👇 Optimizada para usar allObstacles pre-calculado
-    private fun checkCollision(x: Float, y: Float, radius: Float): Boolean {
+     fun checkCollision(x: Float, y: Float, radius: Float): Boolean {
         for (obstacle in allObstacles) {
             val closestX = x.coerceIn(obstacle.x, obstacle.x + obstacle.width)
             val closestY = y.coerceIn(obstacle.y, obstacle.y + obstacle.height)
@@ -258,7 +257,7 @@ class GameEngine(
         return false
     }
 
-    private fun checkItemCollection() {
+    fun checkItemCollection() {
         val ballRadius = 16f
         val center = Offset(x, y)
 
@@ -270,8 +269,12 @@ class GameEngine(
 
                 if (distance < ballRadius + item.radius) {
                     item.collected = true
-                    println("🎯 Item recolectado en GameEngine")
-                    onCoinCollected?.invoke() // 👈 Esto debe llamarse
+                    println("🎯 Item recolectado - Llamando callback - Distancia: $distance")
+
+                    // 👇 IMPORTANTE: Llamar al callback
+                    onCoinCollected?.invoke()
+
+                    break // Solo procesar un item por frame
                 }
             }
         }
