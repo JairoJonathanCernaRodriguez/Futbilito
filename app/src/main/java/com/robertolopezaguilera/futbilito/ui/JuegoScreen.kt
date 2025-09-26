@@ -9,6 +9,7 @@ import com.robertolopezaguilera.futbilito.data.GameDatabase
 import com.robertolopezaguilera.futbilito.data.ItemDao
 import com.robertolopezaguilera.futbilito.data.NivelDao
 import com.robertolopezaguilera.futbilito.data.ObstaculoDao
+import com.robertolopezaguilera.futbilito.data.PowersDao
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,6 +20,7 @@ fun JuegoScreen(
     itemDao: ItemDao,
     obstaculoDao: ObstaculoDao,
     nivelDao: NivelDao,
+    powersDao: PowersDao,
     onRestartNivel: () -> Unit,
     tiltX: Float,
     tiltY: Float,
@@ -37,9 +39,10 @@ fun JuegoScreen(
     // 👇 Usar collectAsState() para los Flows
     val items by itemDao.getItemsByNivel(nivelId).collectAsState(initial = emptyList())
     val obstaculos by obstaculoDao.getObstaculosByNivel(nivelId).collectAsState(initial = emptyList())
+    val powers by powersDao.getPowersByNivel(nivelId).collectAsState(initial = emptyList())
 
     // 👇 Verificar si todos los datos están cargados
-    LaunchedEffect(nivelState.value, items, obstaculos) {
+    LaunchedEffect(nivelState.value, items, obstaculos, powers) {
         if (nivelState.value != null) {
             // Pequeño delay para asegurar que todo esté renderizado
             kotlinx.coroutines.delay(50)
@@ -79,6 +82,7 @@ fun JuegoScreen(
         itemsFromDb = items,
         borderObstacles = borderObstacles,
         obstaclesFromDb = obstaculos,
+        powersFromDb = powers,
         tiempoRestante = tiempoRestante,
         onTimeOut = {
             // Manejar tiempo agotado
@@ -95,6 +99,7 @@ fun JuegoScreen(
         // 👇 NUEVO: Pasar la función para agregar monedas
         onAddCoins = { coins ->
             gameViewModel.addMonedas(coins)
-        }
+        },
+        gameViewModel = gameViewModel
     )
 }

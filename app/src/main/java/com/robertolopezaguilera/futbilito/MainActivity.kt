@@ -89,6 +89,13 @@ class MainActivity : ComponentActivity() {
                 daoObstaculos.insertListObstculo(obstaclesNivel8)
                 daoObstaculos.insertListObstculo(obstaclesNivel9)
                 daoObstaculos.insertListObstculo(obstaclesNivel10)
+                //
+                val powersDao = db.powersDao()
+                val poderesNivel1 = listOf(
+                    Powers(coordenadaX = 100, coordenadaY = -100, nivelId = 1, tipo = "speed_boost"),
+                    Powers(coordenadaX = -150, coordenadaY = 150, nivelId = 1, tipo = "ghost_mode")
+                )
+                powersDao.insertarPower(Powers(coordenadaX = 100, coordenadaY = -100, nivelId = 1, tipo = "speed_boost"))
                 //Principiate
 
                 daoItems.insertListItem(itemsNivel11)

@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.robertolopezaguilera.futbilito.admob.showRewardedAd
 import com.robertolopezaguilera.futbilito.admob.rememberRewardedAdState
+import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
+import com.robertolopezaguilera.futbilito.viewmodel.TimeStoreViewModel
 import kotlinx.coroutines.delay
 
 @Composable
@@ -34,15 +36,25 @@ fun Cronometro(
     isPaused: Boolean,
     onTimeOut: () -> Unit,
     onPauseChange: (Boolean) -> Unit,
+    gameViewModel: GameViewModel,
     modifier: Modifier = Modifier,
     isOnline: Boolean = true
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
     val rewardedAdState = rememberRewardedAdState()
+
+    // 👇 Observar las monedas y usuario del ViewModel
+    val usuario by gameViewModel.usuario.collectAsState()
+    val monedasActuales by gameViewModel.monedas.collectAsState()
+
+    // 👇 Nuevo ViewModel para la tienda de tiempo (SIMPLIFICADO)
+    val timeStoreViewModel = remember { TimeStoreViewModel() }
+    val timeStoreState by timeStoreViewModel.timeStoreState.collectAsState()
+
     val tiempo = tiempoRestante.value
 
-    // Animaciones (igual que antes)
+    // Animaciones
     val blinkAlpha by animateFloatAsState(
         targetValue = if (tiempo in 1..10) 1f else 0f,
         animationSpec = if (tiempo in 1..10)
@@ -67,7 +79,56 @@ fun Cronometro(
         label = "scaleAnim"
     )
 
-    // Control del cronómetro - VERSIÓN CORREGIDA
+    // 👇 MEJORADO: Efecto para manejar el resultado de la compra
+    LaunchedEffect(timeStoreState.purchaseSuccess) {
+        if (timeStoreState.purchaseSuccess) {
+            val timeToAdd = if (timeStoreState.timeExtensionsUsed == 0) 30 else 15
+
+            // Verificar si tiene suficientes monedas
+            val monedasDisponibles = usuario?.monedas ?: monedasActuales
+            if (monedasDisponibles >= 30) {
+                // Restar monedas y agregar tiempo
+                gameViewModel.restarMonedas(30)
+                tiempoRestante.value += timeToAdd
+                timeStoreViewModel.hideTimeStoreDialog()
+                println("✅ Compra exitosa: +$timeToAdd segundos")
+            } else {
+                println("❌ No hay suficientes monedas para comprar")
+            }
+
+            delay(1000)
+            timeStoreViewModel.resetPurchaseState()
+        }
+    }
+
+    // 👇 MEJORADO: Efecto para manejar la selección de ver anuncio
+    LaunchedEffect(timeStoreState.watchAdSelected) {
+        if (timeStoreState.watchAdSelected && activity != null) {
+            println("📺 Mostrando anuncio rewarded...")
+
+            showRewardedAd(activity, rewardedAdState,
+                onRewardEarned = { rewardItem ->
+                    val timeToAdd = if (timeStoreState.timeExtensionsUsed == 0) 30 else 15
+                    tiempoRestante.value += timeToAdd
+                    timeStoreViewModel.timeExtensionsUsed++
+                    timeStoreViewModel.hideTimeStoreDialog()
+                    println("✅ Anuncio completado: +$timeToAdd segundos")
+                },
+                onAdDismissed = {
+                    println("📺 Anuncio cerrado")
+                    timeStoreViewModel.hideTimeStoreDialog()
+                    onPauseChange(false)
+                },
+                onAdFailed = {
+                    timeStoreViewModel.hideTimeStoreDialog()
+                    onPauseChange(false)
+                }
+            )
+            timeStoreViewModel.resetPurchaseState()
+        }
+    }
+
+    // Control del cronómetro
     LaunchedEffect(isActive, isPaused) {
         var lastUpdateTime = System.currentTimeMillis()
 
@@ -86,7 +147,7 @@ fun Cronometro(
                     }
                 }
             }
-            delay(100) // Pequeño delay para no consumir demasiados recursos
+            delay(100)
         }
     }
 
@@ -100,7 +161,7 @@ fun Cronometro(
             modifier = Modifier.wrapContentSize(),
             contentAlignment = Alignment.Center
         ) {
-            // Caja del cronómetro (igual que antes)
+            // Caja del cronómetro
             Box(
                 modifier = Modifier
                     .background(
@@ -145,24 +206,13 @@ fun Cronometro(
                         .size(36.dp)
                         .background(Color(0xFF2ECC71), shape = CircleShape)
                         .clickable {
-                            Log.d("RewardedAd", "Botón clickeado")
-                            // PAUSAR el juego
-                            onPauseChange(true)
+                            println("➕ Botón de tiempo clickeado")
+                            // 👇 Obtener monedas actuales para mostrar en el diálogo
+                            val monedasParaDialogo = usuario?.monedas ?: monedasActuales
+                            println("💳 Monedas actuales: $monedasParaDialogo")
 
-                            showRewardedAd(activity, rewardedAdState,
-                                onRewardEarned = { rewardItem ->
-                                    Log.d("RewardedAd", "Añadiendo 30 segundos")
-                                    tiempoRestante.value += 30
-                                },
-                                onAdDismissed = {
-                                    // REANUDAR si se cierra el anuncio
-                                    onPauseChange(false)
-                                },
-                                onAdFailed = {
-                                    // REANUDAR si falla
-                                    onPauseChange(false)
-                                }
-                            )
+                            onPauseChange(true)
+                            timeStoreViewModel.showTimeStoreDialog(monedasParaDialogo)
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -170,5 +220,44 @@ fun Cronometro(
                 }
             }
         }
+    }
+
+    // 👇 DIÁLOGOS
+    // Diálogo de tienda de tiempo
+    TimeStoreDialog(
+        timeStoreState = timeStoreState,
+        onPurchaseWithCoins = {
+            // Verificar inmediatamente con las monedas actuales
+            val monedasDisponibles = usuario?.monedas ?: monedasActuales
+            val puedeComprar = monedasDisponibles >= 30
+
+            if (puedeComprar) {
+                timeStoreViewModel.purchaseTimeWithCoins(monedasDisponibles)
+                true
+            } else {
+                println("❌ No se puede comprar: monedas insuficientes")
+                false
+            }
+        },
+        onWatchAd = {
+            timeStoreViewModel.watchAdForTime()
+        },
+        onDismiss = {
+            timeStoreViewModel.hideTimeStoreDialog()
+            onPauseChange(false)
+            println("❌ Diálogo de tiempo cerrado")
+        }
+    )
+
+    // Diálogo de resultado de compra (opcional - puedes eliminarlo si no lo usas)
+    if (timeStoreState.purchaseSuccess) {
+        PurchaseResultDialog(
+            isVisible = true,
+            isSuccess = true,
+            timeAdded = timeStoreState.timeAdded,
+            onDismiss = {
+                timeStoreViewModel.resetPurchaseState()
+            }
+        )
     }
 }

@@ -80,6 +80,15 @@ interface ItemDao {
 }
 
 @Dao
+interface PowersDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarPower(powers: Powers) // 👈 Corregí el nombre (isertar → insertar)
+
+    @Query("SELECT * FROM powers WHERE nivelId = :nivelId")
+    fun getPowersByNivel(nivelId: Int): Flow<List<Powers>> // 👈 Quita suspend aquí
+}
+
+@Dao
 interface ObstaculoDao {
 
     // Insertar un obstáculo (si ya existe reemplaza)

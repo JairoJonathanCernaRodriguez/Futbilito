@@ -33,12 +33,15 @@ import com.robertolopezaguilera.futbilito.GameActivity
 import com.robertolopezaguilera.futbilito.GameEngine
 import com.robertolopezaguilera.futbilito.GameState
 import com.robertolopezaguilera.futbilito.MainActivity
+import com.robertolopezaguilera.futbilito.PowerType
 import com.robertolopezaguilera.futbilito.R
 import com.robertolopezaguilera.futbilito.admob.AdBanner
 import com.robertolopezaguilera.futbilito.data.Item
 import com.robertolopezaguilera.futbilito.data.Nivel
 import com.robertolopezaguilera.futbilito.data.Obstaculo
+import com.robertolopezaguilera.futbilito.data.Powers
 import com.robertolopezaguilera.futbilito.toGameObstacle
+import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos
@@ -50,13 +53,15 @@ fun MazeGame(
     itemsFromDb: List<Item>,
     borderObstacles: List<Obstaculo>,
     obstaclesFromDb: List<Obstaculo>,
+    powersFromDb: List<Powers>,
     tiempoRestante: MutableState<Int>,
     onTimeOut: () -> Unit,
     onRestart: () -> Unit,
     tiltX: Float,
     tiltY: Float,
     onLevelScored: (Int) -> Unit = {},
-    onAddCoins: (Int) -> Unit = {}
+    onAddCoins: (Int) -> Unit = {},
+    gameViewModel: GameViewModel
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -66,10 +71,17 @@ fun MazeGame(
     var showCoinAnimation by remember { mutableStateOf(false) }
     var coinsEarned by remember { mutableStateOf(0) }
     var pigAnimationTrigger by remember { mutableStateOf(0) }
+    var activePowerType by remember { mutableStateOf<PowerType?>(null) } // 👈 Nuevo estado para poder activo
 
-    // 👇 MediaPlayer y Vibrator - CORREGIDO
+    // 👇 MediaPlayer y Vibrator
     val coinSound = remember {
         MediaPlayer.create(context, R.raw.coin_sound).apply {
+            setOnCompletionListener { it.seekTo(0) }
+        }
+    }
+
+    val powerSound = remember {
+        MediaPlayer.create(context, R.raw.coin_sound).apply { // Usa coin_sound temporalmente o crea power_sound.mp3
             setOnCompletionListener { it.seekTo(0) }
         }
     }
@@ -83,40 +95,72 @@ fun MazeGame(
         onDispose {
             coinSound.stop()
             coinSound.release()
+            powerSound.stop()
+            powerSound.release()
         }
     }
 
-    // 👇 Función para efectos - CORREGIDA
-    val playCoinEffects = remember {
-        {
-            try {
-                println("🔊 EJECUTANDO EFECTOS DE SONIDO Y VIBRACIÓN")
+    // 👇 CORREGIDO: Separar la lógica del timer del efecto de sonido
+    var powerTrigger by remember { mutableStateOf(0) }
+    var lastPowerType by remember { mutableStateOf<PowerType?>(null) }
 
-                // Sonido
-                if (coinSound.isPlaying) {
-                    coinSound.seekTo(0)
-                }
-                coinSound.start()
-                println("🔊 Sonido iniciado - isPlaying: ${coinSound.isPlaying}")
+    // 👇 Timer para limpiar el UI del poder activo (fuera de la lambda)
+    LaunchedEffect(powerTrigger) {
+        lastPowerType?.let { powerType ->
+            delay(when (powerType) {
+                PowerType.SPEED_BOOST -> 10000L
+                PowerType.GHOST_MODE -> 8000L
+                else -> 0L
+            })
+            activePowerType = null
+            lastPowerType = null
+        }
+    }
 
-                // Vibración
-                if (vibrator.hasVibrator()) {
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            vibrator.vibrate(VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE))
-                        } else {
-                            @Suppress("DEPRECATION")
-                            vibrator.vibrate(200)
-                        }
-                        println("📳 Vibración ejecutada")
-                    } catch (vibeException: Exception) {
-                        println("❌ Error en vibración: ${vibeException.message}")
-                    }
+    // 👇 Función para efectos de monedas
+    val playCoinEffects = {
+        try {
+            println("🔊 Efectos de moneda")
+            if (coinSound.isPlaying) coinSound.seekTo(0)
+            coinSound.start()
+
+            if (vibrator.hasVibrator()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(100)
                 }
-            } catch (e: Exception) {
-                println("❌ Error general en efectos: ${e.message}")
-                e.printStackTrace()
             }
+        } catch (e: Exception) {
+            println("❌ Error en efectos: ${e.message}")
+        }
+    }
+
+    // 👇 CORREGIDO: Función simple para efectos de poder
+    val playPowerEffects = { powerType: PowerType ->
+        try {
+            println("⚡ Efectos de power-up: $powerType")
+            if (powerSound.isPlaying) powerSound.seekTo(0)
+            powerSound.start()
+
+            // Vibración más larga para poderes
+            if (vibrator.hasVibrator()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(300)
+                }
+            }
+
+            // Actualizar UI con el poder activo
+            activePowerType = powerType
+            lastPowerType = powerType
+            powerTrigger++ // 👈 Disparar el timer
+
+        } catch (e: Exception) {
+            println("❌ Error en efectos de poder: ${e.message}")
         }
     }
 
@@ -133,30 +177,39 @@ fun MazeGame(
     }
 
     val coinPainter = painterResource(id = R.drawable.ic_coin)
+    val ghostPainter = painterResource(id = R.drawable.ic_ghost)
+    val velocidadPainter = painterResource(id = R.drawable.ic_power)
     val tiempoInicial = nivel?.tiempo ?: 60
     var puntuacionLocal by remember { mutableStateOf<Int?>(null) }
     var isGamePaused by remember { mutableStateOf(false) }
 
-    // 🎮 GameEngine - SOLO depende del nivel ID
+    // 🎮 GameEngine
     val gameEngine = remember(nivel?.id) {
         println("🔄 Creando GameEngine para nivel: ${nivel?.id}")
         GameEngine(
             borderObstacles = borderObstacles.map { it.toGameObstacle() },
             obstacles = obstaclesFromDb.map { it.toGameObstacle() },
             itemsFromDb = itemsFromDb,
+            powersFromDb = powersFromDb,
             spawnPoint = Offset(0f, 0f),
             onCoinCollected = {
                 println("🎯 Callback recibido en MazeGame")
                 playCoinEffects()
                 pigAnimationTrigger++
+            },
+            onPowerCollected = { powerType ->
+                println("⚡ Power-up activado: $powerType")
+                playPowerEffects(powerType)
             }
         )
     }
 
-    // 👇 DEBUG: Verificar items recolectados
+    // 👇 DEBUG: Verificar items y poderes recolectados
     val collectedCount = gameEngine.items.count { it.collected }
-    LaunchedEffect(collectedCount) {
-        println("📊 Items recolectados: $collectedCount/${gameEngine.items.size}")
+    val collectedPowers = gameEngine.powers.count { it.collected }
+
+    LaunchedEffect(collectedCount, collectedPowers) {
+        println("📊 Items: $collectedCount/${gameEngine.items.size}, Poderes: $collectedPowers/${gameEngine.powers.size}")
     }
 
     // 👇 Update con sensor
@@ -204,7 +257,7 @@ fun MazeGame(
         }
     }
 
-    // UI (igual que antes)
+    // UI
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -230,6 +283,27 @@ fun MazeGame(
                         )
                     }
 
+                    // 👇 DIBUJAR PODERES NO RECOLECTADOS
+                    gameEngine.powers.forEach { power ->
+                        if (!power.collected) {
+                            val powerSize = power.radius * 2
+                            translate(
+                                left = originX + power.x - power.radius,
+                                top = originY + power.y - power.radius
+                            ) {
+                                // Seleccionar icono según el tipo de poder
+                                val painter = when (power.type) {
+                                    PowerType.SPEED_BOOST -> velocidadPainter
+                                    PowerType.GHOST_MODE -> ghostPainter
+                                    else -> coinPainter // Por defecto
+                                }
+                                with(painter) {
+                                    draw(size = Size(powerSize, powerSize))
+                                }
+                            }
+                        }
+                    }
+
                     // Dibujar items no recolectados
                     gameEngine.items.forEach { item ->
                         if (!item.collected) {
@@ -243,12 +317,101 @@ fun MazeGame(
                         }
                     }
 
-                    // Dibujar pelota
+                    // Dibujar pelota (con efecto si tiene poder activo)
+                    val ballColor = when (gameEngine.activePower) {
+                        PowerType.SPEED_BOOST -> Color(0xFFFFA500) // Naranja para velocidad
+                        PowerType.GHOST_MODE -> Color(0xFF800080)  // Púrpura para fantasma
+                        else -> Color(0xFFBF616A) // Color normal
+                    }
+
                     drawCircle(
-                        color = Color(0xFFBF616A),
+                        color = ballColor,
                         radius = 16f,
                         center = Offset(originX + gameEngine.x, originY + gameEngine.y)
                     )
+
+                    // 👇 EFECTO ESPECIAL para modo fantasma (aura)
+                    if (gameEngine.activePower == PowerType.GHOST_MODE) {
+                        drawCircle(
+                            color = Color(0x40800080), // Púrpura semitransparente
+                            radius = 24f,
+                            center = Offset(originX + gameEngine.x, originY + gameEngine.y),
+                            alpha = 0.3f
+                        )
+                    }
+                }
+
+                // 👇 INDICADOR DE PODER ACTIVO
+                activePowerType?.let { power ->
+                    val powerInfo = gameEngine.getActivePowerInfo()
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(8.dp)
+                            .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Icono del poder activo
+                            Image(
+                                painter = when (power) {
+                                    PowerType.SPEED_BOOST -> velocidadPainter
+                                    PowerType.GHOST_MODE -> ghostPainter
+                                    else -> coinPainter
+                                },
+                                contentDescription = "Power activo",
+                                modifier = Modifier.size(24.dp)
+                            )
+
+                            // Texto descriptivo
+                            Text(
+                                text = when (power) {
+                                    PowerType.SPEED_BOOST -> "Velocidad aumentada"
+                                    PowerType.GHOST_MODE -> "Modo fantasma"
+                                    else -> "Power activo"
+                                },
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            // Tiempo restante
+                            Text(
+                                text = "${powerInfo.remainingTime.toInt()}s",
+                                color = Color.Yellow,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // 👇 CONTADOR DE PODERES RECOLECTADOS (opcional)
+                if (collectedPowers > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 16.dp, top = 80.dp) // Debajo del contador de items
+                            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Image(
+                                painter = velocidadPainter,
+                                contentDescription = "Poderes recolectados",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = " $collectedPowers",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
                 // Resto de tu UI
@@ -273,11 +436,12 @@ fun MazeGame(
                         isGamePaused = paused
                         if (paused) gameEngine.pause() else gameEngine.resume()
                     },
+                    gameViewModel = gameViewModel,
                     isOnline = true,
                     modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
                 )
 
-                // Overlay info
+                // Overlay info (items recolectados)
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -355,123 +519,6 @@ fun MazeGame(
                 }
             }
             //AdBanner(modifier = Modifier.fillMaxWidth())
-        }
-    }
-}
-
-// 👇 Composable CORREGIDO para animación del cerdo
-@Composable
-fun AnimatedPigIcon(trigger: Int) {
-    // Animación cuando cambia el trigger
-    val animationState by animateFloatAsState(
-        targetValue = if (trigger > 0) 1f else 0f,
-        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
-        label = "pigAnimation"
-    )
-
-    // Calcular transformaciones basadas en el estado de animación
-    val scale = 1f + animationState * 0.3f
-    val rotation = animationState * 30f * sin(animationState * PI.toFloat() * 2)
-
-    Image(
-        painter = painterResource(id = R.drawable.ic_pig),
-        contentDescription = "Monedas",
-        modifier = Modifier
-            .size(24.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                rotationZ = rotation
-            }
-    )
-}
-
-// Nueva función de pantalla de carga
-@Composable
-fun LoadingScreen() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF2E3440)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = Color(0xFF5E81AC))
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Cargando nivel...",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-// Nuevo composable para animación de monedas
-@Composable
-fun CoinAnimation(
-    coins: Int,
-    modifier: Modifier = Modifier
-) {
-    // Animación de entrada
-    val transition = rememberInfiniteTransition()
-    val scale by transition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-
-    val alpha by transition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-
-    Box(
-        modifier = modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = alpha
-            }
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Icono de cerdo con monedas
-            Image(
-                painter = painterResource(id = R.drawable.ic_pig),
-                contentDescription = "Monedas ganadas",
-                modifier = Modifier.size(64.dp),
-                colorFilter = ColorFilter.tint(Color(0xFFFFD700))
-            )
-
-            // Texto con las monedas ganadas
-            Text(
-                text = "+$coins monedas",
-                color = Color(0xFFFFD700),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
-                    .padding(8.dp)
-            )
-
-            // Mensaje adicional
-            Text(
-                text = "¡Excelente trabajo!",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
         }
     }
 }

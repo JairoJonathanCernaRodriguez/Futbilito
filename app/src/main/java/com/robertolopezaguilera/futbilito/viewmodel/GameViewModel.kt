@@ -21,15 +21,35 @@ import kotlinx.coroutines.launch
 
 class GameViewModel(private val db: GameDatabase) : ViewModel() {
 
-    // Estado para la lista de niveles
     private val _niveles = MutableStateFlow<List<Nivel>>(emptyList())
     val niveles: StateFlow<List<Nivel>> = _niveles
 
-    // Estado para el usuario actual (suponemos un solo usuario)
     private val _usuario = MutableStateFlow<Usuario?>(null)
     val usuario: StateFlow<Usuario?> = _usuario
 
-    // Cargar todos los niveles
+    // 👇 Nuevo estado para monedas (backup)
+    private val _monedas = MutableStateFlow(0)
+    val monedas: StateFlow<Int> = _monedas
+
+    init {
+        // Cargar datos automáticamente al crear el ViewModel
+        loadUsuario()
+        loadNiveles()
+    }
+
+    // 👇 MEJORADA: Cargar usuario con manejo de errores
+    fun loadUsuario() {
+        viewModelScope.launch {
+            try {
+                val usuarioFromDb = db.usuarioDao().getUsuario()
+                _usuario.value = usuarioFromDb
+                _monedas.value = usuarioFromDb?.monedas ?: 0
+                println("👤 Usuario cargado: ${usuarioFromDb?.nombre}, Monedas: ${usuarioFromDb?.monedas}")
+            } catch (e: Exception) {
+                println("❌ Error cargando usuario: ${e.message}")
+            }
+        }
+    }
     fun loadNiveles() {
         viewModelScope.launch {
             val nivelesFromDb = db.nivelDao().getAllNiveles()
@@ -37,48 +57,44 @@ class GameViewModel(private val db: GameDatabase) : ViewModel() {
         }
     }
 
-    // Cargar usuario por nombre
-    fun loadUsuario() {
-        viewModelScope.launch {
-            val usuarioFromDb = db.usuarioDao().getUsuario()
-            _usuario.value = usuarioFromDb
-        }
-    }
-
-    // Insertar o actualizar un nivel
     fun saveNivel(nivel: Nivel) {
         viewModelScope.launch {
             db.nivelDao().insertNivel(nivel)
-            loadNiveles() // Refrescar lista
+            loadNiveles()
         }
     }
 
-    // Insertar o actualizar usuario
     fun saveUsuario(usuario: Usuario) {
         viewModelScope.launch {
             db.usuarioDao().insertUsuario(usuario)
+            _usuario.value = usuario
+            _monedas.value = usuario.monedas
         }
     }
 
-    // Actualizar monedas del usuario (ejemplo de función)
+    // 👇 MEJORADA: Función para agregar monedas
     fun addMonedas(monedasSumar: Int) {
         viewModelScope.launch {
-            // Para testing, imprime en logcat
-            println("💰 Agregando $monedasSumar monedas")
+            println("💰 Intentando agregar $monedasSumar monedas")
 
-            // Fuerza una actualización visible
-            _usuario.value?.let { currentUser ->
-                val updatedUser = currentUser.copy(monedas = currentUser.monedas + monedasSumar)
-                _usuario.value = updatedUser
-            }
-
-            // Luego actualiza la BD en background
-            launch(Dispatchers.IO) {
+            try {
+                // Obtener usuario actual de la base de datos (más confiable)
                 val currentUser = db.usuarioDao().getUsuario()
-                currentUser?.let {
-                    val updatedUser = it.copy(monedas = it.monedas + monedasSumar)
+                currentUser?.let { usuario ->
+                    val nuevasMonedas = usuario.monedas + monedasSumar
+                    val updatedUser = usuario.copy(monedas = nuevasMonedas)
+
+                    // Actualizar ambos: StateFlow y base de datos
+                    _usuario.value = updatedUser
+                    _monedas.value = nuevasMonedas
                     db.usuarioDao().updateUsuario(updatedUser)
+
+                    println("✅ Monedas actualizadas: $nuevasMonedas")
+                } ?: run {
+                    println("❌ No se encontró usuario para agregar monedas")
                 }
+            } catch (e: Exception) {
+                println("❌ Error agregando monedas: ${e.message}")
             }
         }
     }
@@ -86,6 +102,62 @@ class GameViewModel(private val db: GameDatabase) : ViewModel() {
     fun actualizarPuntuacion(nivelId: Int, puntuacion: Int) {
         viewModelScope.launch {
             db.nivelDao().actualizarPuntuacion(nivelId, puntuacion)
+        }
+    }
+
+    // 👇 MEJORADA: Función para obtener monedas actuales
+    fun getCurrentCoins(): Int {
+        val coinsFromState = _usuario.value?.monedas ?: _monedas.value
+        println("💳 Consultando monedas: $coinsFromState")
+        return coinsFromState
+    }
+
+    // 👇 MEJORADA: Función para obtener monedas de forma asíncrona (más confiable)
+    suspend fun getCurrentCoinsFromDb(): Int {
+        return try {
+            val usuario = db.usuarioDao().getUsuario()
+            val coins = usuario?.monedas ?: 0
+            println("💳 Monedas desde BD: $coins")
+            coins
+        } catch (e: Exception) {
+            println("❌ Error obteniendo monedas de BD: ${e.message}")
+            0
+        }
+    }
+
+    // 👇 MEJORADA: Función para restar monedas
+    fun restarMonedas(monedasRestar: Int) {
+        viewModelScope.launch {
+            try {
+                val currentUser = db.usuarioDao().getUsuario()
+                currentUser?.let { usuario ->
+                    if (usuario.monedas >= monedasRestar) {
+                        val nuevasMonedas = usuario.monedas - monedasRestar
+                        val updatedUser = usuario.copy(monedas = nuevasMonedas)
+
+                        _usuario.value = updatedUser
+                        _monedas.value = nuevasMonedas
+                        db.usuarioDao().updateUsuario(updatedUser)
+
+                        println("✅ Monedas restadas. Nuevo total: $nuevasMonedas")
+                    }
+                }
+            } catch (e: Exception) {
+                println("❌ Error restando monedas: ${e.message}")
+            }
+        }
+    }
+
+    // 👇 NUEVA: Función para verificar si se pueden restar monedas
+    suspend fun puedeRestarMonedas(monedasRestar: Int): Boolean {
+        return try {
+            val usuario = db.usuarioDao().getUsuario()
+            val puede = usuario?.monedas ?: 0 >= monedasRestar
+            println("💳 Verificación de monedas: $puede (Actual: ${usuario?.monedas}, Requerido: $monedasRestar)")
+            puede
+        } catch (e: Exception) {
+            println("❌ Error verificando monedas: ${e.message}")
+            false
         }
     }
 }

@@ -8,9 +8,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import com.robertolopezaguilera.futbilito.data.GameDatabase
 import com.robertolopezaguilera.futbilito.ui.JuegoScreen
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
@@ -42,21 +40,32 @@ class GameActivity : ComponentActivity(), SensorEventListener {
         sensorManager = getSystemService(SensorManager::class.java)
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
+        // 👇 CARGAR USUARIO AL INICIAR LA ACTIVITY
+        gameViewModel.loadUsuario()
 
         setContent {
+            // 👇 Observar el estado de carga del usuario
+            val usuario by gameViewModel.usuario.collectAsState()
+
+            LaunchedEffect(usuario) {
+                if (usuario != null) {
+                    println("👤 Usuario cargado en GameActivity: ${usuario!!.nombre}, Monedas: ${usuario!!.monedas}")
+                }
+            }
+
             JuegoScreen(
                 nivelId = nivelId,
                 itemDao = db.itemDao(),
                 obstaculoDao = db.obstaculoDao(),
                 nivelDao = db.nivelDao(),
+                powersDao = db.powersDao(),
                 onRestartNivel = {
-                    // Si reinicias el nivel, relanza la misma Activity
                     finish()
                     startActivity(intent)
                 },
                 tiltX = tiltX,
                 tiltY = tiltY,
-                gameViewModel = gameViewModel // 👈 Pasar el ViewModel
+                gameViewModel = gameViewModel
             )
         }
     }
@@ -66,6 +75,8 @@ class GameActivity : ComponentActivity(), SensorEventListener {
         accelerometer?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
+        // 👇 Recargar usuario al resumir la activity por si acaso
+        gameViewModel.loadUsuario()
     }
 
     override fun onPause() {

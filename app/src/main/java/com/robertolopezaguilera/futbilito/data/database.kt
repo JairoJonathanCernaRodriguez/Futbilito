@@ -6,8 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [Nivel::class, Usuario::class, Item::class, Obstaculo::class],
-    version = 2, // ⚠️ incrementa versión porque añadimos tablas nuevas
+    entities = [Nivel::class, Usuario::class, Item::class, Obstaculo::class, Powers::class], // 👈 Agrega Powers
+    version = 3, // ⚠️ Incrementa versión porque añadimos nueva tabla
     exportSchema = false
 )
 abstract class GameDatabase : RoomDatabase() {
@@ -16,6 +16,7 @@ abstract class GameDatabase : RoomDatabase() {
     abstract fun usuarioDao(): UsuarioDao
     abstract fun itemDao(): ItemDao
     abstract fun obstaculoDao(): ObstaculoDao
+    abstract fun powersDao(): PowersDao
 
     companion object {
         @Volatile
@@ -28,7 +29,7 @@ abstract class GameDatabase : RoomDatabase() {
                     GameDatabase::class.java,
                     "laberinto_db"
                 )
-                    .fallbackToDestructiveMigration() // ⚠️ borra datos si cambias DB
+                    .fallbackToDestructiveMigration() // ⚠️ Esto borra datos al cambiar versión
                     .build()
                 INSTANCE = instance
                 instance
