@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,18 +39,14 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.robertolopezaguilera.futbilito.SoundManager
+import com.robertolopezaguilera.futbilito.ui.theme.*
 import com.robertolopezaguilera.futbilito.viewmodel.NivelViewModel
-
-// Definir colores para cada categoría
-val tutorialColor = listOf(Color(0xFF4CAF50), Color(0xFF2E7D32))
-val principianteColor = listOf(Color(0xFF2196F3), Color(0xFF1976D2))
-val medioColor = listOf(Color(0xFFFF9800), Color(0xFFF57C00))
-val avanzadoColor = listOf(Color(0xFFF44336), Color(0xFFD32F2F))
-val expertoColor = listOf(Color(0xFF9C27B0), Color(0xFF7B1FA2))
 
 @Composable
 fun CategoriasScreen(
@@ -57,41 +54,45 @@ fun CategoriasScreen(
     onCategoriaClick: (String) -> Unit
 ) {
     val categorias by viewModel.categoriasConProgreso.collectAsState()
+    val context = LocalContext.current
+    val soundManager = remember { SoundManager.getInstance(context) }
+
+    // 🔹 KEY OPTIMIZATION: Remember the background brush to avoid recomputation
+    val backgroundBrush = remember {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFF0D1B4A),
+                Color(0xFF172B6F),
+                Color(0xFF233A89)
+            )
+        )
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0D1B4A),
-                        Color(0xFF172B6F),
-                        Color(0xFF233A89)
-                    )
-                )
-            )
+            .background(backgroundBrush)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            Text(
-                text = "Selecciona una Dificultad",
-                style = MaterialTheme.typography.headlineLarge,
-                color = Color.White,
-                fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier
-                    .padding(vertical = 24.dp)
-                    .align(Alignment.CenterHorizontally)
-            )
+            // 🔹 OPTIMIZATION: Extract header to avoid recomputation
+            CategoriesHeader()
 
+            // 🔹 KEY OPTIMIZATION: Use keys for LazyColumn items
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                modifier = Modifier.weight(1f)
             ) {
-                items(categorias) { categoria ->
-                    AnimatedCategoriaCard(
+                items(
+                    items = categorias,
+                    key = { it.dificultad } // 🔹 Important for performance
+                ) { categoria ->
+                    OptimizedCategoriaCard(
                         categoria = categoria,
+                        soundManager = soundManager,
                         onCategoriaClick = onCategoriaClick
                     )
                 }
@@ -100,9 +101,26 @@ fun CategoriasScreen(
     }
 }
 
+// 🔹 OPTIMIZATION: Extract header to separate composable
 @Composable
-fun AnimatedCategoriaCard(
+private fun CategoriesHeader() {
+    Text(
+        text = "Selecciona una Dificultad",
+        style = MaterialTheme.typography.headlineLarge,
+        color = Color.White,
+        fontWeight = FontWeight.ExtraBold,
+        modifier = Modifier
+            .padding(vertical = 24.dp)
+            .fillMaxWidth(),
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+    )
+}
+
+// 🔹 OPTIMIZATION: Combined animated card with better state management
+@Composable
+private fun OptimizedCategoriaCard(
     categoria: CategoriaConProgreso,
+    soundManager: SoundManager,
     onCategoriaClick: (String) -> Unit
 ) {
     val scale by animateFloatAsState(
@@ -111,18 +129,298 @@ fun AnimatedCategoriaCard(
             dampingRatio = 0.6f,
             stiffness = 300f
         ),
-        label = "cardAnimation"
+        label = "cardAnimation_${categoria.dificultad}"
     )
+
+    // 🔹 SOLUCIÓN: Obtener MaterialTheme fuera del remember
+    val colorScheme = MaterialTheme.colorScheme
+
+    // 🔹 OPTIMIZATION: Remember derived values
+    val colors = remember(categoria.dificultad, colorScheme) {
+        when (categoria.dificultad) {
+            "Tutorial" -> tutorialColor
+            "Principiante" -> principianteColor
+            "Medio" -> medioColor
+            "Avanzado" -> avanzadoColor
+            "Experto" -> expertoColor
+            else -> listOf(colorScheme.primary, colorScheme.secondary)
+        }
+    }
+
+    val isLocked = !categoria.isUnlocked
 
     Box(
         modifier = Modifier
             .scale(scale)
             .padding(horizontal = 8.dp)
     ) {
-        CategoriaCard(
+        OptimizedCategoriaCardContent(
             categoria = categoria,
-            onCategoriaClick = onCategoriaClick
+            colors = colors,
+            isLocked = isLocked,
+            onCategoriaClick = {
+                soundManager.playSelectSound()
+                onCategoriaClick(categoria.dificultad)
+            }
         )
+    }
+}
+
+// 🔹 OPTIMIZATION: Separate content to control recomposition
+@Composable
+private fun OptimizedCategoriaCardContent(
+    categoria: CategoriaConProgreso,
+    colors: List<Color>,
+    isLocked: Boolean,
+    onCategoriaClick: () -> Unit
+) {
+    // 🔹 OPTIMIZATION: Remember gradient brushes
+    val backgroundBrush = remember(colors, isLocked) {
+        if (isLocked) {
+            Brush.verticalGradient(listOf(Color.Gray.copy(alpha = 0.7f), Color.DarkGray.copy(alpha = 0.7f)))
+        } else {
+            Brush.verticalGradient(colors)
+        }
+    }
+
+    val iconBackgroundColor = remember(colors, isLocked) {
+        if (isLocked) Color.Gray.copy(alpha = 0.5f) else colors[0].copy(alpha = 0.3f)
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                enabled = !isLocked,
+                onClick = onCategoriaClick
+            ),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            modifier = Modifier
+                .background(backgroundBrush, shape = RoundedCornerShape(20.dp))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                // 🔹 OPTIMIZATION: Pass pre-computed values
+                OptimizedCategoryHeader(
+                    categoria = categoria,
+                    isLocked = isLocked,
+                    iconBackgroundColor = iconBackgroundColor
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OptimizedProgressInfo(categoria, isLocked)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OptimizedProgressBar(categoria.progreso, isLocked)
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OptimizedProgressPercentage(categoria, isLocked)
+            }
+        }
+    }
+}
+
+// 🔹 OPTIMIZATION: Optimized header with pre-computed values
+@Composable
+private fun OptimizedCategoryHeader(
+    categoria: CategoriaConProgreso,
+    isLocked: Boolean,
+    iconBackgroundColor: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(iconBackgroundColor, RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                val icon = if (isLocked) Icons.Default.Lock else Icons.Filled.Star
+                val tintColor = if (isLocked) Color.White.copy(alpha = 0.7f) else Color.White
+
+                Icon(
+                    imageVector = icon,
+                    contentDescription = if (isLocked) "Bloqueado" else "Dificultad",
+                    tint = tintColor,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Text(
+                text = categoria.dificultad,
+                style = MaterialTheme.typography.titleLarge,
+                color = if (isLocked) Color.White.copy(alpha = 0.7f) else Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        // 🔹 OPTIMIZATION: Remember status icon
+        val statusIcon = remember(categoria.progreso, isLocked) {
+            when {
+                isLocked -> Icons.Default.Lock to Color.White.copy(alpha = 0.8f)
+                categoria.progreso >= 1f -> Icons.Default.CheckCircle to Color(0xFF00E676)
+                else -> Icons.Default.ArrowForward to Color.White
+            }
+        }
+
+        Icon(
+            imageVector = statusIcon.first,
+            contentDescription = when {
+                isLocked -> "Bloqueado"
+                categoria.progreso >= 1f -> "Completado"
+                else -> "Jugar"
+            },
+            tint = statusIcon.second,
+            modifier = Modifier.size(24.dp)
+        )
+    }
+}
+
+// 🔹 OPTIMIZATION: Optimized progress info
+@Composable
+private fun OptimizedProgressInfo(
+    categoria: CategoriaConProgreso,
+    isLocked: Boolean
+) {
+    // 🔹 OPTIMIZATION: Pre-calculate values
+    val nivelesCompletados = remember(categoria) {
+        (categoria.totalNiveles * categoria.progreso).toInt()
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        OptimizedInfoItem(
+            value = categoria.totalNiveles.toString(),
+            label = "Niveles",
+            isLocked = isLocked
+        )
+
+        OptimizedInfoItem(
+            value = "${categoria.puntosObtenidos}/${categoria.puntosTotales}",
+            label = "Estrellas",
+            isLocked = isLocked
+        )
+
+        OptimizedInfoItem(
+            value = "$nivelesCompletados/${categoria.totalNiveles}",
+            label = "Completados",
+            isLocked = isLocked
+        )
+    }
+}
+
+// 🔹 OPTIMIZATION: Optimized info item
+@Composable
+private fun OptimizedInfoItem(value: String, label: String, isLocked: Boolean) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (isLocked) Color.White.copy(alpha = 0.6f) else Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isLocked) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.8f),
+            fontSize = 10.sp
+        )
+    }
+}
+
+// 🔹 OPTIMIZATION: Optimized progress bar
+@Composable
+private fun OptimizedProgressBar(progress: Float, isLocked: Boolean) {
+    val progressColor = remember(progress, isLocked) {
+        when {
+            isLocked -> Color.Gray.copy(alpha = 0.5f)
+            progress >= 1f -> Color(0xFF00E676)
+            else -> Color.White
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(14.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.2f))
+    ) {
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(14.dp)
+                .clip(RoundedCornerShape(10.dp)),
+            color = progressColor,
+            trackColor = Color.Transparent
+        )
+    }
+}
+
+// 🔹 OPTIMIZATION: Optimized progress percentage
+@Composable
+private fun OptimizedProgressPercentage(
+    categoria: CategoriaConProgreso,
+    isLocked: Boolean
+) {
+    val message = remember(categoria.dificultad, isLocked) {
+        if (isLocked) {
+            when (categoria.dificultad) {
+                "Principiante" -> "Completa 50% del Tutorial"
+                "Medio" -> "Completa 50% de Principiante"
+                "Avanzado" -> "Completa 50% de Medio"
+                "Experto" -> "Completa 50% de Avanzado"
+                else -> "Completa la categoría anterior"
+            }
+        } else {
+            "Progreso general"
+        }
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isLocked) Color.White.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.8f),
+            fontSize = 12.sp
+        )
+
+        if (!isLocked) {
+            Text(
+                text = "${(categoria.progreso * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            )
+        }
     }
 }
 

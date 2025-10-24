@@ -11,9 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -277,7 +275,7 @@ fun AnimatedStar(isFilled: Boolean, size: androidx.compose.ui.unit.Dp, delay: In
 }
 
 @Composable
-fun FloatingParticles(particleColor: Color) {
+fun FloatingParticles(particleColor: Color = Color.White.copy(alpha = 0.3f)) {
     val particles = remember { List(15) { it } }
 
     particles.forEach { index ->
@@ -296,8 +294,8 @@ fun FloatingParticles(particleColor: Color) {
 
         val angle = (index * 25).toFloat()
         val radius = 200f + index * 20f
-        val x = radius * cos(angle * Math.PI.toFloat() / 180)
-        val y = radius * sin(angle * Math.PI.toFloat() / 180)
+        val x = radius * cos(angle * Math.PI / 180).toFloat()
+        val y = radius * sin(angle * Math.PI / 180).toFloat()
 
         Box(
             modifier = Modifier

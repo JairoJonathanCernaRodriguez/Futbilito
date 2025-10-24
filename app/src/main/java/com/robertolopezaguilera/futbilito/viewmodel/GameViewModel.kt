@@ -160,6 +160,42 @@ class GameViewModel(private val db: GameDatabase) : ViewModel() {
             false
         }
     }
+    fun actualizarNombreUsuario(nuevoNombre: String) {
+        viewModelScope.launch {
+            try {
+                println("👤 Intentando actualizar nombre a: $nuevoNombre")
+
+                // Obtener usuario actual
+                val currentUser = db.usuarioDao().getUsuario()
+                currentUser?.let { usuario ->
+                    // Crear usuario actualizado
+                    val updatedUser = usuario.copy(nombre = nuevoNombre.trim())
+
+                    // Actualizar ambos: StateFlow y base de datos
+                    _usuario.value = updatedUser
+                    db.usuarioDao().updateUsuario(updatedUser)
+
+                    println("✅ Nombre actualizado correctamente: $nuevoNombre")
+
+                    // 🔹 OPCIONAL: Verificar que se guardó correctamente
+                    val usuarioVerificado = db.usuarioDao().getUsuario()
+                    println("🔍 Verificación - Nombre en BD: ${usuarioVerificado?.nombre}")
+
+                } ?: run {
+                    println("❌ No se encontró usuario para actualizar nombre")
+
+                    // 🔹 OPCIONAL: Crear usuario si no existe
+                    val nuevoUsuario = Usuario(id = 1, nombre = nuevoNombre.trim(), monedas = 0)
+                    _usuario.value = nuevoUsuario
+                    db.usuarioDao().insertUsuario(nuevoUsuario)
+                    println("✅ Usuario creado con nombre: $nuevoNombre")
+                }
+            } catch (e: Exception) {
+                println("❌ Error actualizando nombre: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
 }
 
 class GameViewModelFactory(private val db: GameDatabase) : ViewModelProvider.Factory {

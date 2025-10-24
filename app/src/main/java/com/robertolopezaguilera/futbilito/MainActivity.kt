@@ -1,6 +1,8 @@
 package com.robertolopezaguilera.futbilito
 
+import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -17,9 +19,9 @@ import com.robertolopezaguilera.futbilito.niveles.*
 import com.robertolopezaguilera.futbilito.ui.AppNavigation
 import com.robertolopezaguilera.utbilito.niveles.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
 class MainActivity : ComponentActivity() {
 
     private lateinit var db: GameDatabase
@@ -30,6 +32,11 @@ class MainActivity : ComponentActivity() {
         db = GameDatabase.getDatabase(this)
 
         lifecycleScope.launch { inicializarNiveles() }
+
+        // 🔹 INICIAR EL SERVICIO DE MÚSICA CON UN PEQUEÑO DELAY
+        lifecycleScope.launch {
+            startMenuMusicService()
+        }
 
         setContent {
             var isLoaded by remember { mutableStateOf(false) }
@@ -45,11 +52,66 @@ class MainActivity : ComponentActivity() {
                 LoadingScreen()
             } else {
                 AppNavigation(
-                    startDestination = if (usuario == null) "registro" else "categorias",
+                    startDestination = if (usuario == null) "registro" else "main",
                     db = db
                 )
             }
         }
+    }
+
+    // 🔹 CAMBIO: Método específico para música de menú
+    private fun startMenuMusicService() {
+        try {
+            val intent = Intent(this, MusicService::class.java)
+            intent.putExtra("action", "play")
+            intent.putExtra("track", "menu") // 🔹 Especificar track de menú
+            startService(intent)
+            Log.d("MainActivity", "Servicio de música de menú iniciado")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error al iniciar servicio de música de menú: ${e.message}")
+        }
+    }
+
+    // 🔹 PAUSAR MÚSICA CUANDO LA APP ENTRA EN SEGUNDO PLANO
+    override fun onPause() {
+        super.onPause()
+        pauseMusic()
+    }
+
+    // 🔹 REANUDAR MÚSICA CUANDO LA APP VUELVE AL PRIMER PLANO
+    override fun onResume() {
+        super.onResume()
+        resumeMusic()
+    }
+
+    private fun pauseMusic() {
+        val intent = Intent(this, MusicService::class.java)
+        intent.putExtra("action", "pause")
+        startService(intent)
+    }
+
+    private fun resumeMusic() {
+        try {
+            val intent = Intent(this, MusicService::class.java)
+            intent.putExtra("action", "play")
+            intent.putExtra("track", "menu") // 🔹 Especificar track de menú
+            startService(intent)
+            Log.d("MainActivity", "Música de menú reanudada")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error al reanudar música de menú: ${e.message}")
+        }
+    }
+
+    // 🔹 DETENER MÚSICA CUANDO LA APP SE CIERRA
+    override fun onDestroy() {
+        super.onDestroy()
+        stopMusic()
+    }
+
+    private fun stopMusic() {
+        val intent = Intent(this, MusicService::class.java)
+        intent.putExtra("action", "stop")
+        startService(intent)
     }
 
     private suspend fun inicializarNiveles() {
@@ -58,11 +120,16 @@ class MainActivity : ComponentActivity() {
             if (dao.getAllNiveles().isEmpty()) {
                 val niveles = mutableListOf<Nivel>()
                 var id = 1
-                repeat(10) { niveles.add(Nivel(id++, 60, 0, "Tutorial")) }
-                repeat(30) { niveles.add(Nivel(id++, 60, 0, "Principiante")) }
-                repeat(30) { niveles.add(Nivel(id++, 60, 0, "Medio")) }
-                repeat(20) { niveles.add(Nivel(id++, 60, 0, "Avanzado")) }
-                repeat(10) { niveles.add(Nivel(id++, 60, 0, "Experto")) }
+                repeat(10) { niveles.add(Nivel(id++, 60, 0,
+                    "Tutorial")) }
+                repeat(30) { niveles.add(Nivel(id++, 60, 0,
+                    "Principiante")) }
+                repeat(30) { niveles.add(Nivel(id++, 60, 0,
+                    "Medio")) }
+                repeat(20) { niveles.add(Nivel(id++, 60, 0,
+                    "Avanzado")) }
+                repeat(10) { niveles.add(Nivel(id++, 60, 0,
+                    "Experto")) }
                 dao.insertNiveles(niveles)
 
                 val daoItems = db.itemDao()
@@ -95,18 +162,38 @@ class MainActivity : ComponentActivity() {
                     Powers(coordenadaX = 100, coordenadaY = -100, nivelId = 1, tipo = "speed_boost"),
                     Powers(coordenadaX = -150, coordenadaY = 150, nivelId = 1, tipo = "ghost_mode")
                 )
-                powersDao.insertarPower(Powers(coordenadaX = 100, coordenadaY = -100, nivelId = 1, tipo = "speed_boost"))
+                powersDao.insertarPower(Powers(coordenadaX = 100, coordenadaY = -100, nivelId = 1,
+                    tipo = "speed_boost"))
                 //Principiate
 
                 daoItems.insertListItem(itemsNivel11)
                 daoItems.insertListItem(itemsNivel12)
                 daoItems.insertListItem(itemsNivel13)
                 daoItems.insertListItem(itemsNivel14)
+                daoItems.insertListItem(itemsNivel15)
+                daoItems.insertListItem(itemsNivel16)
+                daoItems.insertListItem(itemsNivel17)
+                daoItems.insertListItem(itemsNivel18)
+                daoItems.insertListItem(itemsNivel19)
                 //
                 daoObstaculos.insertListObstculo(obstaclesNivel11)
                 daoObstaculos.insertListObstculo(obstaclesNivel12)
+                powersDao.insertarPower(Powers(coordenadaX = -380, coordenadaY = -560, nivelId = 12,
+                    tipo = "speed_boost"))
                 daoObstaculos.insertListObstculo(obstaclesNivel13)
                 daoObstaculos.insertListObstculo(obstaclesNivel14)
+                daoObstaculos.insertListObstculo(obstaclesNivel15)
+                daoObstaculos.insertListObstculo(obstaclesNivel16)
+                daoObstaculos.insertListObstculo(obstaclesNivel17)
+                powersDao.insertarPower(Powers(coordenadaX = 300, coordenadaY = -80, nivelId = 17,
+                    tipo = "speed_boost"))
+                daoObstaculos.insertListObstculo(obstaclesNivel18)
+                powersDao.insertarPower(Powers(coordenadaX = -300, coordenadaY = -200, nivelId = 18,
+                    tipo = "speed_boost"))
+                daoObstaculos.insertListObstculo(obstaclesNivel19)
+                powersDao.insertarPower(Powers(coordenadaX = 380, coordenadaY = -440, nivelId = 19,
+                    tipo = "ghost_mode"))
+
                 //Dificil
 
 
