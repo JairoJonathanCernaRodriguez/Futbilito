@@ -107,3 +107,43 @@ interface ObstaculoDao {
     @Query("SELECT * FROM obstaculos WHERE nivelId = :nivelId")
     fun getObstaculosByNivel(nivelId: Int): Flow<List<Obstaculo>>
 }
+
+// data/TiendaDao.kt
+@Dao
+interface TiendaDao {
+    @Query("SELECT * FROM tienda_items WHERE tipo = :tipo")
+    fun getItemsPorTipo(tipo: TipoItem): Flow<List<TiendaItem>>
+
+    @Query("SELECT * FROM tienda_items WHERE desbloqueado = 1")
+    fun getItemsDesbloqueados(): Flow<List<TiendaItem>>
+
+    @Query("SELECT * FROM tienda_items WHERE id = :id")
+    suspend fun getItemPorId(id: Int): TiendaItem?
+
+    @Update
+    suspend fun actualizarItem(item: TiendaItem)
+
+    @Query("SELECT * FROM usuario_personalizacion WHERE id = 1")
+    suspend fun getPersonalizacionUsuario(): UsuarioPersonalizacion?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarPersonalizacion(personalizacion: UsuarioPersonalizacion)
+
+    @Query("SELECT * FROM tienda_items")
+    fun getAllItems(): Flow<List<TiendaItem>>
+
+    @Query("UPDATE tienda_items SET desbloqueado = :desbloqueado WHERE id = :id")
+    suspend fun updateDesbloqueado(id: Int, desbloqueado: Boolean)
+
+    @Query("UPDATE tienda_items SET seleccionado = :seleccionado WHERE id = :id")
+    suspend fun updateSeleccionado(id: Int, seleccionado: Boolean)
+
+    @Query("UPDATE tienda_items SET seleccionado = 0 WHERE tipo = :tipo")
+    suspend fun deseleccionarTodosPorTipo(tipo: TipoItem)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<TiendaItem>)
+
+    @Query("DELETE FROM tienda_items")
+    suspend fun deleteAll()
+}

@@ -21,6 +21,8 @@ import com.robertolopezaguilera.futbilito.data.Usuario
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModelFactory
 import com.robertolopezaguilera.futbilito.viewmodel.NivelViewModel
+import com.robertolopezaguilera.futbilito.viewmodel.TiendaViewModel
+import com.robertolopezaguilera.futbilito.viewmodel.TiendaViewModelFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -34,12 +36,12 @@ fun AppNavigation(
     val nivelViewModel = NivelViewModel(db.nivelDao())
     val context = LocalContext.current
 
-    // 🔹 NUEVO: ViewModel para la pantalla principal
+    // 🔹 ViewModel para la pantalla principal
     val gameViewModel: GameViewModel = viewModel(
         factory = GameViewModelFactory(db)
     )
 
-    // 🔹 NUEVO: Cargar usuario al iniciar
+    // 🔹 Cargar usuario al iniciar
     LaunchedEffect(Unit) {
         gameViewModel.loadUsuario()
     }
@@ -48,7 +50,7 @@ fun AppNavigation(
         navController = navController,
         startDestination = startDestination
     ) {
-        // 🔹 NUEVA RUTA: Pantalla principal
+        // 🔹 Pantalla principal
         composable("main") {
             val usuario by gameViewModel.usuario.collectAsState()
 
@@ -110,7 +112,7 @@ fun AppNavigation(
             )
         }
 
-        // 🔹 NUEVAS RUTAS: Ajustes y Tienda
+        // 🔹 RUTA: Ajustes
         composable("ajustes") {
             AjustesScreen(
                 onBackClick = { navController.popBackStack() },
@@ -118,12 +120,13 @@ fun AppNavigation(
             )
         }
 
-//        composable("tienda") {
-//            TiendaScreen(
-//                onBackClick = { navController.popBackStack() },
-//                gameViewModel = gameViewModel
-//            )
-//        }
+        // 🔹 RUTA CORREGIDA: Tienda
+        composable("tienda") {
+            TiendaScreen(
+                onBackClick = { navController.popBackStack() },
+                gameViewModel = gameViewModel,
+                tiendaDao = db.tiendaDao() // 👈 CORRECCIÓN: Usar 'db' en lugar de 'database'
+            )
+        }
     }
 }
-

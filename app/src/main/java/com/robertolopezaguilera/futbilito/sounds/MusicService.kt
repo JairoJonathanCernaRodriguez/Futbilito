@@ -12,16 +12,21 @@ class MusicService : Service() {
     private var isPrepared = false
     private var shouldPlay = true
     private var isPausedByUser = false
-    private var currentTrack: MusicTrack = MusicTrack.MENU // 🔹 NUEVO: Track actual
+    private var currentTrack: MusicTrack = MusicTrack.MENU
+    private var currentVolume: Float = 0.7f // 🔹 NUEVO: Variable para trackear volumen actual
 
-    // 🔹 NUEVO: Enum para los diferentes tracks
+    // 🔹 NUEVO: SharedPreferences para cargar volumen guardado
+    private lateinit var prefs: android.content.SharedPreferences
+
     enum class MusicTrack(val resourceId: Int) {
-        MENU(R.raw.game_music_loop_14),    // Música de menús
-        GAME(R.raw.game_music_loop_19)     // Música de juego
+        MENU(R.raw.game_music_loop_14),
+        GAME(R.raw.game_music_loop_19)
     }
 
     companion object {
         private const val TAG = "MusicService"
+        private const val PREF_MUSIC_VOLUME = "music_volume"
+        private const val DEFAULT_MUSIC_VOLUME = 0.7f
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -29,7 +34,13 @@ class MusicService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Servicio de música creado")
-        // 🔹 CAMBIO: No inicializar automáticamente, esperar comando
+
+        // 🔹 NUEVO: Inicializar SharedPreferences
+        prefs = getSharedPreferences("audio_settings", android.content.Context.MODE_PRIVATE)
+
+        // 🔹 NUEVO: Cargar volumen guardado al crear el servicio
+        currentVolume = prefs.getFloat(PREF_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME)
+        Log.d(TAG, "Volumen cargado al crear servicio: $currentVolume")
     }
 
     private fun initializeMediaPlayer(track: MusicTrack = MusicTrack.MENU) {
@@ -38,7 +49,7 @@ class MusicService : Service() {
             mediaPlayer?.release()
 
             mediaPlayer = MediaPlayer()
-            currentTrack = track // 🔹 Actualizar track actual
+            currentTrack = track
 
             mediaPlayer?.apply {
                 // Configurar el data source con el track específico
@@ -46,20 +57,24 @@ class MusicService : Service() {
                 setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                 afd.close()
 
-                // Configurar listeners
+                // 🔹 NUEVO: Aplicar volumen guardado inmediatamente después de preparar
                 setOnPreparedListener { mp ->
                     Log.d(TAG, "MediaPlayer preparado correctamente para: $track")
                     isPrepared = true
+
+                    // 🔹 APLICAR VOLUMEN GUARDADO
+                    mp.setVolume(currentVolume, currentVolume)
+                    Log.d(TAG, "Volumen aplicado al MediaPlayer: $currentVolume")
+
                     if (shouldPlay && !isPausedByUser) {
                         mp.start()
-                        Log.d(TAG, "Música reproduciéndose: $track")
+                        Log.d(TAG, "Música reproduciéndose: $track con volumen: ${(currentVolume * 100).toInt()}%")
                     }
                 }
 
                 setOnCompletionListener { mp ->
                     Log.d(TAG, "Canción completada: $track, reiniciando inmediatamente...")
                     if (shouldPlay && isPrepared && !isPausedByUser) {
-                        // Reiniciar inmediatamente sin delay
                         mp.seekTo(0)
                         mp.start()
                     }
@@ -67,14 +82,12 @@ class MusicService : Service() {
 
                 setOnErrorListener { mp, what, extra ->
                     Log.e(TAG, "Error en MediaPlayer para $track - what: $what, extra: $extra")
-                    // Reintentar después de un breve delay
                     android.os.Handler(mainLooper).postDelayed({
                         resetMediaPlayer()
                     }, 1000)
                     true
                 }
 
-                // Preparar de forma asíncrona
                 prepareAsync()
             }
 
@@ -88,16 +101,17 @@ class MusicService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand recibido: ${intent?.getStringExtra("action")}, track: ${intent?.getStringExtra("track")}")
 
-        // 🔹 NUEVO: Obtener el track solicitado (por defecto MENU)
         val requestedTrack = when (intent?.getStringExtra("track")) {
             "game" -> MusicTrack.GAME
             "menu" -> MusicTrack.MENU
-            else -> MusicTrack.MENU // Por defecto
+            else -> MusicTrack.MENU
         }
 
         when (intent?.getStringExtra("action")) {
             "play" -> {
-                // 🔹 NUEVO: Cambiar track si es diferente al actual
+                // 🔹 CAMBIO: Cargar volumen actualizado antes de reproducir
+                currentVolume = prefs.getFloat(PREF_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME)
+
                 if (currentTrack != requestedTrack || mediaPlayer == null) {
                     Log.d(TAG, "Cambiando track de $currentTrack a $requestedTrack")
                     initializeMediaPlayer(requestedTrack)
@@ -108,7 +122,6 @@ class MusicService : Service() {
                 }
             }
             "pause" -> {
-                // 🔹 NUEVO: Marcar como pausado por usuario
                 isPausedByUser = true
                 pauseMusic()
             }
@@ -120,9 +133,14 @@ class MusicService : Service() {
             "set_volume" -> {
                 val volume = intent.getFloatExtra("volume", 0.7f)
                 setVolume(volume)
+                // 🔹 NUEVO: Guardar inmediatamente en SharedPreferences
+                prefs.edit().putFloat(PREF_MUSIC_VOLUME, volume).apply()
+                Log.d(TAG, "Volumen guardado en SharedPreferences: $volume")
             }
             else -> {
-                // Por defecto: play con track solicitado
+                // 🔹 CAMBIO: Cargar volumen actualizado para acción por defecto
+                currentVolume = prefs.getFloat(PREF_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME)
+
                 if (currentTrack != requestedTrack || mediaPlayer == null) {
                     initializeMediaPlayer(requestedTrack)
                 } else {
@@ -137,8 +155,16 @@ class MusicService : Service() {
 
     private fun setVolume(volume: Float) {
         try {
-            mediaPlayer?.setVolume(volume, volume)
-            Log.d(TAG, "Volumen de música ajustado a: ${(volume * 100).toInt()}%")
+            currentVolume = volume.coerceIn(0f, 1f)
+            mediaPlayer?.setVolume(currentVolume, currentVolume)
+            Log.d(TAG, "Volumen de música ajustado a: ${(currentVolume * 100).toInt()}%")
+
+            // 🔹 NUEVO: Si el volumen es 0, pausar; si es > 0 y debería reproducir, reanudar
+            if (currentVolume == 0f && mediaPlayer?.isPlaying == true) {
+                pauseMusic()
+            } else if (currentVolume > 0f && shouldPlay && !isPausedByUser && mediaPlayer?.isPlaying == false) {
+                playMusic()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error ajustando volumen: ${e.message}")
         }
@@ -153,8 +179,10 @@ class MusicService : Service() {
             }
 
             if (isPrepared && !mediaPlayer!!.isPlaying && shouldPlay && !isPausedByUser) {
+                // 🔹 NUEVO: Asegurar que el volumen actual esté aplicado
+                mediaPlayer!!.setVolume(currentVolume, currentVolume)
                 mediaPlayer!!.start()
-                Log.d(TAG, "Música reanudada: $currentTrack")
+                Log.d(TAG, "Música reanudada: $currentTrack con volumen: ${(currentVolume * 100).toInt()}%")
             } else if (!isPrepared) {
                 Log.d(TAG, "MediaPlayer no está preparado, esperando...")
             } else if (isPausedByUser) {
@@ -199,7 +227,6 @@ class MusicService : Service() {
             isPrepared = false
             isPausedByUser = false
             if (shouldPlay) {
-                // Reintentar después de un breve delay
                 android.os.Handler(mainLooper).postDelayed({
                     initializeMediaPlayer(currentTrack)
                 }, 500)
@@ -207,6 +234,12 @@ class MusicService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Error al resetear MediaPlayer: ${e.message}")
         }
+    }
+
+    // 🔹 NUEVO: Método para cargar volumen guardado (útil cuando el servicio ya está ejecutándose)
+    private fun loadSavedVolume() {
+        currentVolume = prefs.getFloat(PREF_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME)
+        Log.d(TAG, "Volumen recargado: $currentVolume")
     }
 
     override fun onDestroy() {

@@ -10,12 +10,22 @@ class SoundManager private constructor(private val context: Context) {
     private var soundPool: SoundPool
     private var soundMap: HashMap<String, Int> = HashMap()
 
-    // 🔹 NUEVO: Variable para controlar el volumen global de efectos
+    // 🔹 NUEVO: SharedPreferences para persistencia
+    private val prefs = context.getSharedPreferences("audio_settings", Context.MODE_PRIVATE)
+
+    // 🔹 NUEVO: Variables con valores por defecto
     private var effectsVolume: Float = 1.0f
+    private var musicVolume: Float = 0.7f
 
     companion object {
         private const val TAG = "SoundManager"
         private var instance: SoundManager? = null
+
+        // 🔹 NUEVO: Claves para SharedPreferences
+        private const val PREF_EFFECTS_VOLUME = "effects_volume"
+        private const val PREF_MUSIC_VOLUME = "music_volume"
+        private const val DEFAULT_EFFECTS_VOLUME = 1.0f
+        private const val DEFAULT_MUSIC_VOLUME = 0.7f
 
         fun getInstance(context: Context): SoundManager {
             return instance ?: synchronized(this) {
@@ -35,8 +45,13 @@ class SoundManager private constructor(private val context: Context) {
             .setAudioAttributes(audioAttributes)
             .build()
 
+        // 🔹 CAMBIO: Cargar volúmenes guardados antes de cargar sonidos
+        loadSavedVolumes()
+
         // Cargar sonidos
         loadSounds()
+
+        Log.d(TAG, "SoundManager inicializado - Efectos: ${(effectsVolume * 100).toInt()}%, Música: ${(musicVolume * 100).toInt()}%")
     }
 
     private fun loadSounds() {
@@ -48,11 +63,31 @@ class SoundManager private constructor(private val context: Context) {
         }
     }
 
+    // 🔹 NUEVO: Cargar volúmenes guardados
+    private fun loadSavedVolumes() {
+        effectsVolume = prefs.getFloat(PREF_EFFECTS_VOLUME, DEFAULT_EFFECTS_VOLUME)
+        musicVolume = prefs.getFloat(PREF_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME)
+        Log.d(TAG, "Volúmenes cargados - Efectos: $effectsVolume, Música: $musicVolume")
+    }
+
+    // 🔹 NUEVO: Guardar volumen de efectos
+    private fun saveEffectsVolume(volume: Float) {
+        effectsVolume = volume.coerceIn(0f, 1f)
+        prefs.edit().putFloat(PREF_EFFECTS_VOLUME, effectsVolume).apply()
+        Log.d(TAG, "Volumen de efectos guardado: $effectsVolume")
+    }
+
+    // 🔹 NUEVO: Guardar volumen de música
+    fun saveMusicVolume(volume: Float) {
+        musicVolume = volume.coerceIn(0f, 1f)
+        prefs.edit().putFloat(PREF_MUSIC_VOLUME, musicVolume).apply()
+        Log.d(TAG, "Volumen de música guardado: $musicVolume")
+    }
+
     fun playSelectSound() {
         try {
             val soundId = soundMap["select"]
             if (soundId != null && soundId != 0) {
-                // 🔹 CAMBIO: Usar effectsVolume en lugar de 1.0f
                 soundPool.play(soundId, effectsVolume, effectsVolume, 1, 0, 1.0f)
                 Log.d(TAG, "Sonido de selección reproducido (volumen: ${(effectsVolume * 100).toInt()}%)")
             } else {
@@ -63,9 +98,9 @@ class SoundManager private constructor(private val context: Context) {
         }
     }
 
-    // 🔹 NUEVA FUNCIÓN: Cambiar volumen de efectos
+    // 🔹 MEJORADO: Cambiar volumen de efectos con persistencia
     fun setEffectsVolume(volume: Float) {
-        effectsVolume = volume.coerceIn(0f, 1f)
+        saveEffectsVolume(volume)
         Log.d(TAG, "Volumen de efectos ajustado a: ${(effectsVolume * 100).toInt()}%")
 
         // 🔹 OPCIONAL: Reproducir sonido de prueba al cambiar volumen (si no está en mute)
@@ -74,16 +109,54 @@ class SoundManager private constructor(private val context: Context) {
         }
     }
 
-    // 🔹 NUEVA FUNCIÓN: Obtener volumen actual
+    // 🔹 NUEVO: Obtener volumen de música
+    fun getMusicVolume(): Float {
+        return musicVolume
+    }
+
+    // 🔹 NUEVO: Cargar volumen de música (para inicialización)
+    fun loadMusicVolume(): Float {
+        return prefs.getFloat(PREF_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME)
+    }
+
+    // 🔹 NUEVO: Cargar volumen de efectos (para inicialización)
+    fun loadEffectsVolume(): Float {
+        return prefs.getFloat(PREF_EFFECTS_VOLUME, DEFAULT_EFFECTS_VOLUME)
+    }
+
+    // 🔹 Obtener volumen actual de efectos
     fun getEffectsVolume(): Float {
         return effectsVolume
     }
 
-    // 🔹 NUEVA FUNCIÓN: Silenciar/activar efectos
+    // 🔹 MEJORADO: Silenciar/activar efectos con persistencia
     fun toggleEffectsMute(): Float {
-        val newVolume = if (effectsVolume > 0f) 0f else 1f
-        setEffectsVolume(newVolume)
+        val newVolume = if (effectsVolume > 0f) 0f else loadEffectsVolume()
+        if (newVolume > 0f && effectsVolume == 0f) {
+            // Si estamos reactivando, usar el último volumen guardado
+            setEffectsVolume(newVolume)
+        } else {
+            // Si estamos silenciando, guardar 0
+            setEffectsVolume(newVolume)
+        }
         return newVolume
+    }
+
+    // 🔹 NUEVO: Resetear a valores por defecto
+    fun resetToDefaults() {
+        setEffectsVolume(DEFAULT_EFFECTS_VOLUME)
+        saveMusicVolume(DEFAULT_MUSIC_VOLUME)
+        Log.d(TAG, "Volúmenes reseteados a valores por defecto")
+    }
+
+    // 🔹 NUEVO: Verificar si los efectos están silenciados
+    fun isEffectsMuted(): Boolean {
+        return effectsVolume == 0f
+    }
+
+    // 🔹 NUEVO: Verificar si la música está silenciada
+    fun isMusicMuted(): Boolean {
+        return musicVolume == 0f
     }
 
     fun release() {

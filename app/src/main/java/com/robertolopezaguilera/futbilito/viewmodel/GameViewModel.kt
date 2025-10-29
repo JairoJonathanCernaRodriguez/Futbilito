@@ -1,16 +1,16 @@
 package com.robertolopezaguilera.futbilito.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.robertolopezaguilera.futbilito.data.GameDatabase
 import com.robertolopezaguilera.futbilito.data.Nivel
 import com.robertolopezaguilera.futbilito.data.NivelDao
+import com.robertolopezaguilera.futbilito.data.TiendaItem
+import com.robertolopezaguilera.futbilito.data.TipoItem
 import com.robertolopezaguilera.futbilito.data.Usuario
 import com.robertolopezaguilera.futbilito.ui.CategoriaConProgreso
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,6 +18,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.robertolopezaguilera.futbilito.R
+import com.robertolopezaguilera.futbilito.data.TiendaDao
+import kotlinx.coroutines.flow.first
 
 class GameViewModel(private val db: GameDatabase) : ViewModel() {
 
@@ -262,5 +265,284 @@ class NivelViewModel(private val dao: NivelDao) : ViewModel() {
 
     fun getNivelesPorCategoria(categoria: String): Flow<List<Nivel>> {
         return dao.getNivelesPorCategoria(categoria)
+    }
+}
+
+class TiendaViewModel(
+    private val gameViewModel: GameViewModel,
+    private val tiendaDao: TiendaDao
+) : ViewModel() {
+
+    private val _itemsFondo = MutableStateFlow<List<TiendaItem>>(emptyList())
+    val itemsFondo: StateFlow<List<TiendaItem>> = _itemsFondo
+
+    private val _itemsPelota = MutableStateFlow<List<TiendaItem>>(emptyList())
+    val itemsPelota: StateFlow<List<TiendaItem>> = _itemsPelota
+
+    private val _itemsObstaculo = MutableStateFlow<List<TiendaItem>>(emptyList())
+    val itemsObstaculo: StateFlow<List<TiendaItem>> = _itemsObstaculo
+
+    private val _itemsIcono = MutableStateFlow<List<TiendaItem>>(emptyList())
+    val itemsIcono: StateFlow<List<TiendaItem>> = _itemsIcono
+
+    init {
+        cargarItemsDesdeBD()
+    }
+
+    private fun cargarItemsDesdeBD() {
+        viewModelScope.launch {
+            try {
+                val itemsFromDb = tiendaDao.getAllItems().first()
+                if (itemsFromDb.isEmpty()) {
+                    // Si no hay datos, insertar los iniciales
+                    insertarDatosIniciales()
+                } else {
+                    // Cargar datos desde BD
+                    actualizarListsDesdeBD(itemsFromDb)
+                }
+            } catch (e: Exception) {
+                println("❌ Error cargando items desde BD: ${e.message}")
+                // En caso de error, cargar datos en memoria como respaldo
+                cargarDatosEnMemoriaComoRespaldo()
+            }
+        }
+    }
+
+    private suspend fun insertarDatosIniciales() {
+        val itemsIniciales = crearListaItemsIniciales()
+        tiendaDao.insertAll(itemsIniciales)
+        actualizarListsDesdeBD(itemsIniciales)
+    }
+
+    // 👇 NUEVO: Método único para crear la lista de items
+    private fun crearListaItemsIniciales(): List<TiendaItem> {
+        return listOf(
+            // 👇 FONDOS
+            TiendaItem(1, "Azul Oscuro", TipoItem.FONDO, 0, "#0D1B4A", desbloqueado = true, seleccionado = true),
+            TiendaItem(2, "Verde Bosque", TipoItem.FONDO, 100, "#1B5E20", desbloqueado = false),
+            TiendaItem(3, "Rojo Pasión", TipoItem.FONDO, 150, "#B71C1C", desbloqueado = false),
+            TiendaItem(4, "Púrpura Místico", TipoItem.FONDO, 200, "#4A148C", desbloqueado = false),
+            TiendaItem(5, "Noche Estrellada", TipoItem.FONDO, 300, "#0A2463", desbloqueado = false),
+            TiendaItem(27, "Amarillo Sol", TipoItem.FONDO, 120, "#F57F17", desbloqueado = false),
+            TiendaItem(28, "Naranja Cálido", TipoItem.FONDO, 180, "#E65100", desbloqueado = false),
+            TiendaItem(29, "Rosa Vibrante", TipoItem.FONDO, 220, "#C2185B", desbloqueado = false),
+            TiendaItem(30, "Cian Profundo", TipoItem.FONDO, 160, "#006064", desbloqueado = false),
+            TiendaItem(31, "Gris Oscuro", TipoItem.FONDO, 90, "#212121", desbloqueado = false),
+            TiendaItem(32, "Verde Azulado", TipoItem.FONDO, 140, "#004D40", desbloqueado = false),
+            TiendaItem(33, "Azul Cielo", TipoItem.FONDO, 110, "#0277BD", desbloqueado = false),
+            TiendaItem(34, "Morado Real", TipoItem.FONDO, 190, "#6A1B9A", desbloqueado = false),
+            TiendaItem(35, "Café Oscuro", TipoItem.FONDO, 130, "#3E2723", desbloqueado = false),
+
+            // 👇 PELOTAS
+            TiendaItem(6, "Rojo Clásico", TipoItem.PELOTA, 0, "#BF616A", desbloqueado = true, seleccionado = true),
+            TiendaItem(7, "Azul Eléctrico", TipoItem.PELOTA, 80, "#2196F3", desbloqueado = false),
+            TiendaItem(8, "Verde Esmeralda", TipoItem.PELOTA, 120, "#4CAF50", desbloqueado = false),
+            TiendaItem(9, "Dorado Brillante", TipoItem.PELOTA, 200, "#FFD700", desbloqueado = false),
+            TiendaItem(10, "Naranja Fuego", TipoItem.PELOTA, 150, "#FF5722", desbloqueado = false),
+            TiendaItem(36, "Rosa Neón", TipoItem.PELOTA, 100, "#E91E63", desbloqueado = false),
+            TiendaItem(37, "Púrpura Mágico", TipoItem.PELOTA, 130, "#9C27B0", desbloqueado = false),
+            TiendaItem(38, "Cian Brillante", TipoItem.PELOTA, 110, "#00BCD4", desbloqueado = false),
+            TiendaItem(39, "Lima Vibrante", TipoItem.PELOTA, 90, "#CDDC39", desbloqueado = false),
+            TiendaItem(40, "Coral Cálido", TipoItem.PELOTA, 120, "#FF7043", desbloqueado = false),
+            TiendaItem(41, "Azul Marino", TipoItem.PELOTA, 140, "#303F9F", desbloqueado = false),
+            TiendaItem(42, "Verde Lima", TipoItem.PELOTA, 95, "#AFB42B", desbloqueado = false),
+            TiendaItem(43, "Magenta", TipoItem.PELOTA, 160, "#C2185B", desbloqueado = false),
+            TiendaItem(44, "Turquesa", TipoItem.PELOTA, 125, "#009688", desbloqueado = false),
+            TiendaItem(45, "Violeta", TipoItem.PELOTA, 145, "#7B1FA2", desbloqueado = false),
+
+            // 👇 OBSTÁCULOS
+            TiendaItem(11, "Azul Standard", TipoItem.OBSTACULO, 0, "#5E81AC", desbloqueado = true, seleccionado = true),
+            TiendaItem(12, "Gris Metal", TipoItem.OBSTACULO, 90, "#607D8B", desbloqueado = false),
+            TiendaItem(13, "Verde Agua", TipoItem.OBSTACULO, 130, "#009688", desbloqueado = false),
+            TiendaItem(14, "Naranja", TipoItem.OBSTACULO, 180, "#FF9800", desbloqueado = false),
+            TiendaItem(15, "Rosa", TipoItem.OBSTACULO, 220, "#E91E63", desbloqueado = false),
+            TiendaItem(46, "Rojo Oscuro", TipoItem.OBSTACULO, 150, "#C62828", desbloqueado = false),
+            TiendaItem(47, "Verde Oscuro", TipoItem.OBSTACULO, 140, "#2E7D32", desbloqueado = false),
+            TiendaItem(48, "Púrpura Oscuro", TipoItem.OBSTACULO, 170, "#6A1B9A", desbloqueado = false),
+            TiendaItem(49, "Amarillo Mostaza", TipoItem.OBSTACULO, 120, "#F9A825", desbloqueado = false),
+            TiendaItem(50, "Cian Oscuro", TipoItem.OBSTACULO, 160, "#00838F", desbloqueado = false),
+            TiendaItem(51, "Marrón", TipoItem.OBSTACULO, 110, "#5D4037", desbloqueado = false),
+            TiendaItem(52, "Azul Grisáceo", TipoItem.OBSTACULO, 100, "#546E7A", desbloqueado = false),
+            TiendaItem(53, "Verde Oliva", TipoItem.OBSTACULO, 130, "#827717", desbloqueado = false),
+            TiendaItem(54, "Rojo Ladrillo", TipoItem.OBSTACULO, 145, "#D84315", desbloqueado = false),
+            TiendaItem(55, "Azul Acero", TipoItem.OBSTACULO, 125, "#455A64", desbloqueado = false),
+
+            // 👇 ICONOS
+            TiendaItem(16, "Simple", TipoItem.ICONO, 0, null, R.drawable.ic_ballsimple, desbloqueado = true, seleccionado = true),
+            TiendaItem(17, "Basketball", TipoItem.ICONO, 200, null, R.drawable.ic_ballbasketball, desbloqueado = false),
+            TiendaItem(18, "Corazón", TipoItem.ICONO, 180, null, R.drawable.ic_ballheart, desbloqueado = false),
+            TiendaItem(19, "Rayo", TipoItem.ICONO, 130, null, R.drawable.ic_balllightning, desbloqueado = false),
+            TiendaItem(20, "Planeta", TipoItem.ICONO, 140, null, R.drawable.ic_ballplanet, desbloqueado = false),
+            TiendaItem(21, "Pool", TipoItem.ICONO, 200, null, R.drawable.ic_ballpool, desbloqueado = false),
+            TiendaItem(22, "Boliche", TipoItem.ICONO, 125, null, R.drawable.ic_ballsharp, desbloqueado = false),
+            TiendaItem(23, "Balón Fútbol", TipoItem.ICONO, 200, null, R.drawable.ic_ballsoccer, desbloqueado = false),
+            TiendaItem(24, "Tennis", TipoItem.ICONO, 110, null, R.drawable.ic_balltennis, desbloqueado = false),
+            TiendaItem(25, "Volleyball", TipoItem.ICONO, 120, null, R.drawable.ic_ballvolleyball, desbloqueado = false),
+            TiendaItem(26, "Estrella", TipoItem.ICONO, 150, null, R.drawable.ic_star, desbloqueado = false),
+            TiendaItem(56, "Beisbol", TipoItem.ICONO, 115, null, R.drawable.ic_ballbaseball, desbloqueado = false),
+            TiendaItem(57, "Rugby", TipoItem.ICONO, 125, null, R.drawable.ic_ballrugby, desbloqueado = false),
+            TiendaItem(60, "Ping Pong", TipoItem.ICONO, 105, null, R.drawable.ic_ballpingpong, desbloqueado = false)
+        )
+    }
+
+    // 👇 ACTUALIZADO: Solo para respaldo en caso de error
+    private fun cargarDatosEnMemoriaComoRespaldo() {
+        viewModelScope.launch {
+            val itemsRespaldo = crearListaItemsIniciales()
+            actualizarListsDesdeBD(itemsRespaldo)
+            println("⚠️ Cargando datos en memoria como respaldo")
+        }
+    }
+
+    private fun actualizarListsDesdeBD(items: List<TiendaItem>) {
+        _itemsFondo.value = items.filter { it.tipo == TipoItem.FONDO }
+        _itemsPelota.value = items.filter { it.tipo == TipoItem.PELOTA }
+        _itemsObstaculo.value = items.filter { it.tipo == TipoItem.OBSTACULO }
+        _itemsIcono.value = items.filter { it.tipo == TipoItem.ICONO }
+
+        println("✅ Datos cargados: ${_itemsFondo.value.size} fondos, ${_itemsPelota.value.size} pelotas, ${_itemsObstaculo.value.size} obstáculos, ${_itemsIcono.value.size} iconos")
+    }
+
+    // 👇 ELIMINADO: cargarDatosIniciales() ya no es necesario
+    // 👇 ELIMINADO: cargarDatosEnMemoria() reemplazado por cargarDatosEnMemoriaComoRespaldo()
+
+    // ... el resto de tus métodos permanecen igual (comprarItem, seleccionarItem, etc.)
+    fun comprarItem(item: TiendaItem) {
+        viewModelScope.launch {
+            val monedasActuales = gameViewModel.usuario.value?.monedas ?: 0
+            if (monedasActuales >= item.precio && !item.desbloqueado) {
+                try {
+                    // Descontar monedas
+                    gameViewModel.restarMonedas(item.precio)
+
+                    // Actualizar en BD
+                    tiendaDao.updateDesbloqueado(item.id, true)
+
+                    // Actualizar en memoria
+                    actualizarItemEnMemoria(item.copy(desbloqueado = true))
+
+                    println("✅ Item ${item.nombre} comprado y guardado en BD")
+                } catch (e: Exception) {
+                    println("❌ Error comprando item: ${e.message}")
+                    // Revertir monedas en caso de error
+                    gameViewModel.addMonedas(item.precio)
+                }
+            }
+        }
+    }
+
+    fun seleccionarItem(item: TiendaItem) {
+        viewModelScope.launch {
+            if (item.desbloqueado) {
+                try {
+                    // Deseleccionar todos los items del mismo tipo en BD
+                    tiendaDao.deseleccionarTodosPorTipo(item.tipo)
+
+                    // Seleccionar el item actual en BD
+                    tiendaDao.updateSeleccionado(item.id, true)
+
+                    // Actualizar en memoria
+                    when (item.tipo) {
+                        TipoItem.FONDO -> {
+                            _itemsFondo.value = _itemsFondo.value.map {
+                                it.copy(seleccionado = it.id == item.id)
+                            }
+                        }
+                        TipoItem.PELOTA -> {
+                            _itemsPelota.value = _itemsPelota.value.map {
+                                it.copy(seleccionado = it.id == item.id)
+                            }
+                        }
+                        TipoItem.OBSTACULO -> {
+                            _itemsObstaculo.value = _itemsObstaculo.value.map {
+                                it.copy(seleccionado = it.id == item.id)
+                            }
+                        }
+                        TipoItem.ICONO -> {
+                            _itemsIcono.value = _itemsIcono.value.map {
+                                it.copy(seleccionado = it.id == item.id)
+                            }
+                        }
+                    }
+
+                    println("✅ Item ${item.nombre} seleccionado y guardado en BD")
+                } catch (e: Exception) {
+                    println("❌ Error seleccionando item: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun actualizarItemEnMemoria(itemActualizado: TiendaItem) {
+        when (itemActualizado.tipo) {
+            TipoItem.FONDO -> {
+                _itemsFondo.value = _itemsFondo.value.map {
+                    if (it.id == itemActualizado.id) itemActualizado else it
+                }
+            }
+            TipoItem.PELOTA -> {
+                _itemsPelota.value = _itemsPelota.value.map {
+                    if (it.id == itemActualizado.id) itemActualizado else it
+                }
+            }
+            TipoItem.OBSTACULO -> {
+                _itemsObstaculo.value = _itemsObstaculo.value.map {
+                    if (it.id == itemActualizado.id) itemActualizado else it
+                }
+            }
+            TipoItem.ICONO -> {
+                _itemsIcono.value = _itemsIcono.value.map {
+                    if (it.id == itemActualizado.id) itemActualizado else it
+                }
+            }
+        }
+    }
+
+    fun getColorFondoSeleccionado(): Color {
+        return try {
+            val hex = _itemsFondo.value.find { it.seleccionado }?.colorHex ?: "#0D1B4A"
+            Color(android.graphics.Color.parseColor(hex))
+        } catch (e: Exception) {
+            Color(0xFF0D1B4A)
+        }
+    }
+
+    fun getColorPelotaSeleccionado(): Color {
+        return try {
+            val hex = _itemsPelota.value.find { it.seleccionado }?.colorHex ?: "#BF616A"
+            Color(android.graphics.Color.parseColor(hex))
+        } catch (e: Exception) {
+            Color(0xFFBF616A)
+        }
+    }
+
+    fun getColorObstaculoSeleccionado(): Color {
+        return try {
+            val hex = _itemsObstaculo.value.find { it.seleccionado }?.colorHex ?: "#5E81AC"
+            Color(android.graphics.Color.parseColor(hex))
+        } catch (e: Exception) {
+            Color(0xFF5E81AC)
+        }
+    }
+
+    fun getIconoSeleccionado(): Int {
+        return _itemsIcono.value.find { it.seleccionado }?.imagenResId ?: R.drawable.ic_ballsimple
+    }
+
+    fun getIconoPelotaSeleccionado(): Int {
+        return _itemsIcono.value.find { it.seleccionado }?.imagenResId ?: R.drawable.ic_ballsimple
+    }
+}
+
+class TiendaViewModelFactory(
+    private val gameViewModel: GameViewModel,
+    private val tiendaDao: TiendaDao // 👈 NUEVO: Recibir el DAO
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(TiendaViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return TiendaViewModel(gameViewModel, tiendaDao) as T // 👈 Pasar el DAO
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

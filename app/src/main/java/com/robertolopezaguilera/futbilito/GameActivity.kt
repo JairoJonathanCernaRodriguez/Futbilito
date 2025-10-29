@@ -11,10 +11,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.runtime.*
+import androidx.lifecycle.ViewModelProvider
 import com.robertolopezaguilera.futbilito.data.GameDatabase
 import com.robertolopezaguilera.futbilito.ui.JuegoScreen
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModelFactory
+import com.robertolopezaguilera.futbilito.viewmodel.TiendaViewModel
+import com.robertolopezaguilera.futbilito.viewmodel.TiendaViewModelFactory
 
 class GameActivity : ComponentActivity(), SensorEventListener {
 
@@ -26,10 +29,13 @@ class GameActivity : ComponentActivity(), SensorEventListener {
 
     private lateinit var db: GameDatabase
 
-    // 👇 Crear el ViewModel usando viewModels delegate
+    // 👇 ViewModels
     private val gameViewModel: GameViewModel by viewModels {
         GameViewModelFactory(GameDatabase.getDatabase(this))
     }
+
+    // 👇 NUEVO: TiendaViewModel
+    private lateinit var tiendaViewModel: TiendaViewModel
 
     // 🔹 NUEVO: Variable para controlar si ya se inició la música
     private var musicStarted = false
@@ -38,6 +44,12 @@ class GameActivity : ComponentActivity(), SensorEventListener {
         super.onCreate(savedInstanceState)
 
         db = GameDatabase.getDatabase(this)
+
+        // 👇 CORREGIDO: Inicializar TiendaViewModel con el DAO
+        tiendaViewModel = ViewModelProvider(
+            this,
+            TiendaViewModelFactory(gameViewModel, db.tiendaDao()) // 👈 Añadir tiendaDao
+        )[TiendaViewModel::class.java]
 
         // 🔹 Recibir el nivelId desde el Intent
         val nivelId = intent.getIntExtra("nivelId", 1)
@@ -64,6 +76,7 @@ class GameActivity : ComponentActivity(), SensorEventListener {
                 }
             }
 
+            // 👇 NUEVO: Pasar el TiendaViewModel al JuegoScreen
             JuegoScreen(
                 nivelId = nivelId,
                 itemDao = db.itemDao(),
@@ -76,7 +89,8 @@ class GameActivity : ComponentActivity(), SensorEventListener {
                 },
                 tiltX = tiltX,
                 tiltY = tiltY,
-                gameViewModel = gameViewModel
+                gameViewModel = gameViewModel,
+                tiendaViewModel = tiendaViewModel // 👈 NUEVO: Pasar el ViewModel de tienda
             )
         }
     }
@@ -97,10 +111,6 @@ class GameActivity : ComponentActivity(), SensorEventListener {
         super.onPause()
         sensorManager.unregisterListener(this)
 
-        // 🔹 OPCIONAL: Pausar música cuando el juego está en pausa
-        // Si quieres que la música continue incluso cuando el juego está en pausa,
-        // comenta esta línea
-        // pauseMusic()
     }
 
     override fun onBackPressed() {
@@ -136,9 +146,6 @@ class GameActivity : ComponentActivity(), SensorEventListener {
             Log.e("GameActivity", "Error al iniciar música de juego: ${e.message}")
         }
     }
-
-    // 🔹 ELIMINAR: Este método ya no es necesario
-    // private fun resumeGameMusic() { ... }
 
     // 🔹 NUEVO: Método para cambiar a música de menú
     private fun playMenuMusic() {

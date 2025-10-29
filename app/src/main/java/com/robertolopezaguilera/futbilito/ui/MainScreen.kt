@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +58,7 @@ import com.robertolopezaguilera.futbilito.R
 import com.robertolopezaguilera.futbilito.SoundManager
 import com.robertolopezaguilera.futbilito.data.Usuario
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun MainScreen(
@@ -75,24 +78,13 @@ fun MainScreen(
         )
     }
 
-    // Animación de partículas flotantes
-    val infiniteTransition = rememberInfiniteTransition()
-    val particleOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = androidx.compose.animation.core.LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundBrush)
     ) {
-        // Partículas decorativas de fondo
-        FloatingParticles(particleColor = Color.White.copy(alpha = 0.2f))
+        // 🔹 OPTIMIZACIÓN: Partículas más simples para mejor rendimiento
+        SimpleFloatingParticles()
 
         Column(
             modifier = Modifier
@@ -101,32 +93,53 @@ fun MainScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Header con información del usuario
-            UserHeader(usuario, gameViewModel)
-
+            UserHeader(usuario)
             Spacer(modifier = Modifier.weight(0.3f))
-
-            // Logo y título del juego
             GameTitle()
-
             Spacer(modifier = Modifier.weight(0.4f))
-
-            // Botones principales
             MainActions(
                 onPlayClick = onPlayClick,
                 onSettingsClick = onSettingsClick,
                 onShopClick = onShopClick
             )
-
             Spacer(modifier = Modifier.weight(0.2f))
         }
     }
 }
 
-// ... (FloatingParticles, ParticleInfo, AnimatedParticle se mantienen igual)
+// 🔹 VERSIÓN OPTIMIZADA: Partículas más simples
+@Composable
+private fun SimpleFloatingParticles() {
+    val particles = remember { List(5) { it } } // 🔹 REDUCIDO: Menos partículas
+
+    particles.forEach { index ->
+        val infiniteTransition = rememberInfiniteTransition()
+        val offset by infiniteTransition.animateFloat(
+            initialValue = -10f,
+            targetValue = 10f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(3000 + index * 1000),
+                repeatMode = RepeatMode.Reverse
+            )
+        )
+
+        Box(
+            modifier = Modifier
+                .offset(
+                    x = (100 + index * 70).dp,
+                    y = (150 + index * 50 + offset).dp
+                )
+                .size((8 + index * 2).dp)
+                .background(
+                    color = Color.White.copy(alpha = 0.1f),
+                    shape = CircleShape
+                )
+        )
+    }
+}
 
 @Composable
-private fun UserHeader(usuario: Usuario?, gameViewModel: GameViewModel) {
+private fun UserHeader(usuario: Usuario?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -134,7 +147,6 @@ private fun UserHeader(usuario: Usuario?, gameViewModel: GameViewModel) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Información del usuario
         Column {
             Text(
                 text = "¡Hola, ${usuario?.nombre ?: "Jugador"}!",
@@ -145,9 +157,12 @@ private fun UserHeader(usuario: Usuario?, gameViewModel: GameViewModel) {
         }
 
         // Monedas del usuario
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0x40FFFFFF)),
-            shape = RoundedCornerShape(20.dp)
+        Box(
+            modifier = Modifier
+                .background(
+                    color = Color(0x40FFFFFF),
+                    shape = RoundedCornerShape(20.dp)
+                )
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -177,7 +192,7 @@ private fun GameTitle() {
         initialValue = 1f,
         targetValue = 1.05f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = androidx.compose.animation.core.LinearEasing),
+            animation = tween(1000),
             repeatMode = RepeatMode.Reverse
         )
     )
@@ -185,12 +200,11 @@ private fun GameTitle() {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Logo del juego
         Box(
             modifier = Modifier
                 .size(120.dp)
                 .scale(scale)
-                .shadow(16.dp, CircleShape)
+                .shadow(16.dp, CircleShape, clip = true) // 🔹 CORRECCIÓN: clip = true
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(Color(0xFFFFD700), Color(0xFFFFA000))
@@ -209,15 +223,12 @@ private fun GameTitle() {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Título del juego
         Text(
             text = "FUTBILITO",
             color = Color.White,
             fontSize = 42.sp,
             fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .shadow(4.dp)
+            textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -244,8 +255,7 @@ private fun MainActions(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Botón PLAY principal
-        AnimatedPlayButton(
+        OptimizedPlayButton(
             onClick = {
                 soundManager.playSelectSound()
                 onPlayClick()
@@ -254,12 +264,11 @@ private fun MainActions(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Botones secundarios
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            ImprovedSecondaryButton(
+            FixedSecondaryButton(
                 icon = Icons.Filled.ShoppingCart,
                 text = "Tienda",
                 onClick = {
@@ -268,7 +277,7 @@ private fun MainActions(
                 }
             )
 
-            ImprovedSecondaryButton(
+            FixedSecondaryButton(
                 icon = Icons.Filled.Settings,
                 text = "Ajustes",
                 onClick = {
@@ -280,34 +289,38 @@ private fun MainActions(
     }
 }
 
+// 🔹 BOTÓN PLAY OPTIMIZADO
 @Composable
-private fun AnimatedPlayButton(onClick: () -> Unit) {
-    var isAnimating by remember { mutableStateOf(false) }
+private fun OptimizedPlayButton(onClick: () -> Unit) {
     val scale = remember { Animatable(1f) }
+    val coroutineScope = rememberCoroutineScope() // 🔹 NUEVO: Coroutine scope
 
-    LaunchedEffect(isAnimating) {
-        if (isAnimating) {
-            scale.animateTo(0.9f, animationSpec = tween(100))
-            scale.animateTo(1.1f, animationSpec = tween(200))
-            scale.animateTo(1f, animationSpec = tween(100))
-            isAnimating = false
-        }
-    }
-
-    // 🔹 SOLUCIÓN: Usar Box con clickable sin ripple
     Box(
         modifier = Modifier
             .width(200.dp)
             .height(70.dp)
-            .scale(scale.value)
-            .shadow(16.dp, RoundedCornerShape(35.dp))
-            .clip(RoundedCornerShape(35.dp))
-            .background(Color(0xFF00E676))
+            .graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+            }
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(35.dp),
+                clip = true
+            )
+            .background(
+                color = Color(0xFF00E676),
+                shape = RoundedCornerShape(35.dp)
+            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null // 🔹 Elimina el efecto ripple/oscuro
+                indication = null
             ) {
-                isAnimating = true
+                // 🔹 CORRECCIÓN: Usar coroutineScope para las animaciones
+                coroutineScope.launch {
+                    scale.animateTo(0.95f, tween(100))
+                    scale.animateTo(1f, tween(100))
+                }
                 onClick()
             },
         contentAlignment = Alignment.Center
@@ -332,33 +345,26 @@ private fun AnimatedPlayButton(onClick: () -> Unit) {
     }
 }
 
-// 🔹 NUEVO: Botón secundario mejorado
 @Composable
-private fun ImprovedSecondaryButton(
+private fun FixedSecondaryButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
     onClick: () -> Unit
 ) {
-    var isAnimating by remember { mutableStateOf(false) }
     val scale = remember { Animatable(1f) }
+    val coroutineScope = rememberCoroutineScope() // 🔹 NUEVO: Coroutine scope
 
-    LaunchedEffect(isAnimating) {
-        if (isAnimating) {
-            scale.animateTo(0.9f, animationSpec = tween(50))
-            scale.animateTo(1f, animationSpec = tween(150))
-            isAnimating = false
-        }
-    }
-
-    // 🔹 SOLUCIÓN: Usar Box en lugar de Card para mejor control
     Box(
         modifier = Modifier
             .size(100.dp)
-            .scale(scale.value)
+            .graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+            }
             .shadow(
                 elevation = 8.dp,
                 shape = RoundedCornerShape(20.dp),
-                clip = false
+                clip = true
             )
             .background(
                 color = Color(0x40FFFFFF),
@@ -366,88 +372,19 @@ private fun ImprovedSecondaryButton(
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null // 🔹 Elimina el efecto ripple/oscuro
-            ) {
-                isAnimating = true
-                onClick()
-            },
-        contentAlignment = Alignment.Center // 🔹 Centrado perfecto
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(12.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = text,
-                tint = Color.White,
-                modifier = Modifier.size(32.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = text,
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-// 🔹 ALTERNATIVA: Versión con efecto de elevación en lugar de sombra
-@Composable
-private fun ElevatedSecondaryButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String,
-    onClick: () -> Unit
-) {
-    var isAnimating by remember { mutableStateOf(false) }
-    val scale = remember { Animatable(1f) }
-    var isPressed by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isAnimating) {
-        if (isAnimating) {
-            scale.animateTo(0.95f, animationSpec = tween(50))
-            scale.animateTo(1f, animationSpec = tween(150))
-            isAnimating = false
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .size(100.dp)
-            .scale(scale.value)
-            .background(
-                color = if (isPressed) Color(0x60FFFFFF) else Color(0x40FFFFFF),
-                shape = RoundedCornerShape(20.dp)
-            )
-            .graphicsLayer {
-                shadowElevation = if (isPressed) 4.dp.toPx() else 8.dp.toPx()
-                shape = RoundedCornerShape(20.dp)
-                clip = true
-            }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                isAnimating = true
-                onClick()
-            }
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        isPressed = event.changes.any { it.pressed }
-                    }
+                // 🔹 CORRECCIÓN: Usar coroutineScope para las animaciones
+                coroutineScope.launch {
+                    scale.animateTo(0.95f, tween(50))
+                    scale.animateTo(1f, tween(100))
                 }
+                onClick()
             },
         contentAlignment = Alignment.Center
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 imageVector = icon,
@@ -460,8 +397,7 @@ private fun ElevatedSecondaryButton(
                 text = text,
                 color = Color.White,
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center
+                fontWeight = FontWeight.Medium
             )
         }
     }

@@ -36,12 +36,14 @@ import com.robertolopezaguilera.futbilito.MainActivity
 import com.robertolopezaguilera.futbilito.PowerType
 import com.robertolopezaguilera.futbilito.R
 import com.robertolopezaguilera.futbilito.admob.AdBanner
+import com.robertolopezaguilera.futbilito.data.GamePersonalizacion
 import com.robertolopezaguilera.futbilito.data.Item
 import com.robertolopezaguilera.futbilito.data.Nivel
 import com.robertolopezaguilera.futbilito.data.Obstaculo
 import com.robertolopezaguilera.futbilito.data.Powers
 import com.robertolopezaguilera.futbilito.toGameObstacle
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
+import com.robertolopezaguilera.futbilito.viewmodel.TiendaViewModel
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos
@@ -61,17 +63,35 @@ fun MazeGame(
     tiltY: Float,
     onLevelScored: (Int) -> Unit = {},
     onAddCoins: (Int) -> Unit = {},
-    gameViewModel: GameViewModel
+    gameViewModel: GameViewModel,
+    tiendaViewModel: TiendaViewModel? = null // 👈 NUEVO: Recibir el ViewModel de tienda
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+
+    // 👇 NUEVO: Cargar personalizaciones desde la tienda
+    val personalizacion = remember(tiendaViewModel) {
+        if (tiendaViewModel != null) {
+            GamePersonalizacion(
+                colorFondo = tiendaViewModel.getColorFondoSeleccionado(),
+                colorPelota = tiendaViewModel.getColorPelotaSeleccionado(),
+                colorObstaculos = tiendaViewModel.getColorObstaculoSeleccionado(),
+                iconoPowerUp = R.drawable.ic_power,
+                iconoFantasma = R.drawable.ic_ghost,
+                iconoPelota = tiendaViewModel.getIconoPelotaSeleccionado() // 👈 NUEVO
+            )
+        } else {
+            // Valores por defecto si no hay tiendaViewModel
+            GamePersonalizacion()
+        }
+    }
 
     // 👇 Estados
     var isLoading by remember { mutableStateOf(true) }
     var showCoinAnimation by remember { mutableStateOf(false) }
     var coinsEarned by remember { mutableStateOf(0) }
     var pigAnimationTrigger by remember { mutableStateOf(0) }
-    var activePowerType by remember { mutableStateOf<PowerType?>(null) } // 👈 Nuevo estado para poder activo
+    var activePowerType by remember { mutableStateOf<PowerType?>(null) }
 
     // 👇 MediaPlayer y Vibrator
     val coinSound = remember {
@@ -81,7 +101,7 @@ fun MazeGame(
     }
 
     val powerSound = remember {
-        MediaPlayer.create(context, R.raw.coin_sound).apply { // Usa coin_sound temporalmente o crea power_sound.mp3
+        MediaPlayer.create(context, R.raw.coin_sound).apply {
             setOnCompletionListener { it.seekTo(0) }
         }
     }
@@ -176,9 +196,11 @@ fun MazeGame(
         return
     }
 
+    // 👇 NUEVO: Usar iconos personalizados desde la tienda
     val coinPainter = painterResource(id = R.drawable.ic_coin)
-    val ghostPainter = painterResource(id = R.drawable.ic_ghost)
-    val velocidadPainter = painterResource(id = R.drawable.ic_power)
+    val ghostPainter = painterResource(id = personalizacion.iconoFantasma)
+    val velocidadPainter = painterResource(id = personalizacion.iconoPowerUp)
+
     val tiempoInicial = nivel?.tiempo ?: 60
     var puntuacionLocal by remember { mutableStateOf<Int?>(null) }
     var isGamePaused by remember { mutableStateOf(false) }
@@ -260,16 +282,20 @@ fun MazeGame(
     // UI
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
+            val ballIconRes = tiendaViewModel?.getIconoSeleccionado() ?: R.drawable.ic_star
+            val ballIconPainter = painterResource(id = ballIconRes)
+
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawRect(color = Color(0xFF2E3440), size = size)
+                    // 👇 NUEVO: Usar color de fondo personalizado
+                    drawRect(color = personalizacion.colorFondo, size = size)
                     val originX = size.width / 2f
                     val originY = size.height / 2f
 
-                    // Dibujar obstáculos
+                    // 👇 NUEVO: Dibujar obstáculos con color personalizado
                     gameEngine.borderObstacles.forEach { o ->
                         drawRect(
-                            color = Color(0xFF5E81AC),
+                            color = personalizacion.colorObstaculos,
                             topLeft = Offset(originX + o.x, originY + o.y),
                             size = Size(o.width, o.height)
                         )
@@ -277,13 +303,13 @@ fun MazeGame(
 
                     gameEngine.obstacles.forEach { o ->
                         drawRect(
-                            color = Color(0xFF5E81AC),
+                            color = personalizacion.colorObstaculos,
                             topLeft = Offset(originX + o.x, originY + o.y),
                             size = Size(o.width, o.height)
                         )
                     }
 
-                    // 👇 DIBUJAR PODERES NO RECOLECTADOS
+                    // 👇 DIBUJAR PODERES NO RECOLECTADOS (con iconos personalizados)
                     gameEngine.powers.forEach { power ->
                         if (!power.collected) {
                             val powerSize = power.radius * 2
@@ -317,31 +343,56 @@ fun MazeGame(
                         }
                     }
 
-                    // Dibujar pelota (con efecto si tiene poder activo)
-                    val ballColor = when (gameEngine.activePower) {
+                    // 👇 CORREGIDO: Dibujar pelota con icono personalizado en lugar de círculo
+                    val ballSize = 40f // Tamaño del icono de la pelota
+
+                    // 👇 Aplicar efectos de color según el poder activo
+                    val iconTint = when (gameEngine.activePower) {
                         PowerType.SPEED_BOOST -> Color(0xFFFFA500) // Naranja para velocidad
                         PowerType.GHOST_MODE -> Color(0xFF800080)  // Púrpura para fantasma
-                        else -> Color(0xFFBF616A) // Color normal
+                        else -> Color.White // Color normal (sin tint)
                     }
 
-                    drawCircle(
-                        color = ballColor,
-                        radius = 16f,
-                        center = Offset(originX + gameEngine.x, originY + gameEngine.y)
-                    )
+                    translate(
+                        left = originX + gameEngine.x - ballSize / 2,
+                        top = originY + gameEngine.y - ballSize / 2
+                    ) {
+                        with(ballIconPainter) {
+                            if (iconTint == Color.White) {
+                                // Dibujar sin tint (color original del icono)
+                                draw(size = Size(ballSize, ballSize))
+                            } else {
+                                // Dibujar con tint para efectos de poder
+                                draw(
+                                    size = Size(ballSize, ballSize),
+                                    colorFilter = ColorFilter.tint(iconTint)
+                                )
+                            }
+                        }
+                    }
 
-                    // 👇 EFECTO ESPECIAL para modo fantasma (aura)
+                    // 👇 EFECTO ESPECIAL para modo fantasma (aura) - mantener alrededor del icono
                     if (gameEngine.activePower == PowerType.GHOST_MODE) {
                         drawCircle(
                             color = Color(0x40800080), // Púrpura semitransparente
-                            radius = 24f,
+                            radius = ballSize / 2 + 8f, // Aura un poco más grande que el icono
                             center = Offset(originX + gameEngine.x, originY + gameEngine.y),
                             alpha = 0.3f
                         )
                     }
+
+                    // 👇 EFECTO ESPECIAL para velocidad (aura naranja)
+                    if (gameEngine.activePower == PowerType.SPEED_BOOST) {
+                        drawCircle(
+                            color = Color(0x40FFA500), // Naranja semitransparente
+                            radius = ballSize / 2 + 6f,
+                            center = Offset(originX + gameEngine.x, originY + gameEngine.y),
+                            alpha = 0.4f
+                        )
+                    }
                 }
 
-                // 👇 INDICADOR DE PODER ACTIVO
+                // 👇 INDICADOR DE PODER ACTIVO (con iconos personalizados)
                 activePowerType?.let { power ->
                     val powerInfo = gameEngine.getActivePowerInfo()
                     Box(
@@ -355,7 +406,7 @@ fun MazeGame(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Icono del poder activo
+                            // Icono del poder activo (personalizado)
                             Image(
                                 painter = when (power) {
                                     PowerType.SPEED_BOOST -> velocidadPainter
@@ -389,18 +440,18 @@ fun MazeGame(
                     }
                 }
 
-                // 👇 CONTADOR DE PODERES RECOLECTADOS (opcional)
+                // 👇 CONTADOR DE PODERES RECOLECTADOS (con icono personalizado)
                 if (collectedPowers > 0) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(start = 16.dp, top = 80.dp) // Debajo del contador de items
+                            .padding(start = 16.dp, top = 80.dp)
                             .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                             .padding(8.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Image(
-                                painter = velocidadPainter,
+                                painter = velocidadPainter, // 👈 Icono personalizado
                                 contentDescription = "Poderes recolectados",
                                 modifier = Modifier.size(20.dp)
                             )
@@ -414,7 +465,7 @@ fun MazeGame(
                     }
                 }
 
-                // Resto de tu UI
+                // Resto de tu UI (sin cambios)
                 PauseButton(
                     isPaused = isGamePaused,
                     onPauseChange = { paused ->

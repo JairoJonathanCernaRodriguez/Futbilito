@@ -6,8 +6,9 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [Nivel::class, Usuario::class, Item::class, Obstaculo::class, Powers::class], // 👈 Agrega Powers
-    version = 3, // ⚠️ Incrementa versión porque añadimos nueva tabla
+    entities = [Nivel::class, Usuario::class, Item::class, Obstaculo::class,
+        Powers::class, TiendaItem::class, UsuarioPersonalizacion::class], // 👈 Agrega Powers
+    version = 4, // ⚠️ Incrementa versión porque añadimos nueva tabla
     exportSchema = false
 )
 abstract class GameDatabase : RoomDatabase() {
@@ -17,6 +18,7 @@ abstract class GameDatabase : RoomDatabase() {
     abstract fun itemDao(): ItemDao
     abstract fun obstaculoDao(): ObstaculoDao
     abstract fun powersDao(): PowersDao
+    abstract fun tiendaDao(): TiendaDao
 
     companion object {
         @Volatile

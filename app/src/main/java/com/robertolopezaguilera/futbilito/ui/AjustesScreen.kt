@@ -2,6 +2,7 @@ package com.robertolopezaguilera.futbilito.ui
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -72,16 +73,18 @@ fun AjustesScreen(
     var vibrationEnabled by remember { mutableStateOf(true) }
     var showEditNameDialog by remember { mutableStateOf(false) }
 
-    // Estados para los ajustes de audio
-    var musicVolume by remember { mutableStateOf(0.7f) }
-    var soundVolume by remember { mutableStateOf(soundManager.getEffectsVolume()) }
-    var previousMusicVolume by remember { mutableStateOf(0.7f) } // Para restaurar después de mute
-    var previousSoundVolume by remember { mutableStateOf(soundManager.getEffectsVolume()) }  // Para restaurar después de mute
+    // 🔹 CORRECCIÓN: Cargar volúmenes persistentes
+    var musicVolume by remember { mutableStateOf(soundManager.loadMusicVolume()) }
+    var soundVolume by remember { mutableStateOf(soundManager.loadEffectsVolume()) }
+    var previousMusicVolume by remember { mutableStateOf(soundManager.loadMusicVolume()) }
+    var previousSoundVolume by remember { mutableStateOf(soundManager.loadEffectsVolume()) }
 
     // 🔹 FUNCIONES PARA MANEJAR AUDIO
     val onMusicVolumeChange = { newVolume: Float ->
         musicVolume = newVolume
         updateMusicVolume(context, newVolume)
+        // 🔹 GUARDAR VOLUMEN PERSISTENTE
+        soundManager.saveMusicVolume(newVolume)
         // Solo reproducir sonido si no es mute completo
         if (newVolume > 0) {
             soundManager.playSelectSound()
@@ -90,9 +93,9 @@ fun AjustesScreen(
 
     val onSoundVolumeChange = { newVolume: Float ->
         soundVolume = newVolume
-        // Actualizar volumen de efectos en SoundManager
-        // soundManager.setVolume(newVolume) // Si tu SoundManager soporta esto
-        soundManager.playSelectSound() // Demo del volumen actual
+        // 🔹 GUARDAR VOLUMEN PERSISTENTE
+        soundManager.setEffectsVolume(newVolume)
+        // El SoundManager ya reproduce el sonido de prueba automáticamente
     }
 
     val onMusicMuteToggle = {
@@ -101,10 +104,12 @@ fun AjustesScreen(
             previousMusicVolume = musicVolume
             musicVolume = 0f
             updateMusicVolume(context, 0f)
+            soundManager.saveMusicVolume(0f)
         } else {
             // Reactivar: restaurar volumen anterior
             musicVolume = previousMusicVolume
             updateMusicVolume(context, previousMusicVolume)
+            soundManager.saveMusicVolume(previousMusicVolume)
             soundManager.playSelectSound()
         }
     }
@@ -114,17 +119,23 @@ fun AjustesScreen(
             // Silenciar: guardar volumen actual y poner a 0
             previousSoundVolume = soundVolume
             soundVolume = 0f
+            soundManager.setEffectsVolume(0f)
         } else {
             // Reactivar: restaurar volumen anterior
             soundVolume = previousSoundVolume
-            soundManager.playSelectSound()
+            soundManager.setEffectsVolume(previousSoundVolume)
         }
     }
 
     // 🔹 NUEVO: Cargar ajustes guardados
     LaunchedEffect(Unit) {
-        soundVolume = soundManager.getEffectsVolume()
+        // Asegurar que los volúmenes estén sincronizados
+        musicVolume = soundManager.loadMusicVolume()
+        soundVolume = soundManager.loadEffectsVolume()
+        previousMusicVolume = musicVolume
         previousSoundVolume = soundVolume
+
+        Log.d("AjustesScreen", "Volúmenes inicializados - Música: $musicVolume, Efectos: $soundVolume")
     }
 
     Box(
@@ -840,7 +851,15 @@ private fun updateMusicVolume(context: Context, volume: Float) {
     val intent = Intent(context, MusicService::class.java)
     intent.putExtra("action", "set_volume")
     intent.putExtra("volume", volume)
-    context.startService(intent)
+
+    // 🔹 IMPORTANTE: Usar startService en lugar de startService para Android 8+
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+        context.startForegroundService(intent)
+    } else {
+        context.startService(intent)
+    }
+
+    Log.d("AjustesScreen", "Volumen de música actualizado a: ${(volume * 100).toInt()}%")
 }
 
 private fun toggleNotifications(context: Context, enabled: Boolean) {

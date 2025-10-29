@@ -36,6 +36,7 @@ import com.robertolopezaguilera.futbilito.data.ObstaculoDao
 import com.robertolopezaguilera.futbilito.data.Powers
 import com.robertolopezaguilera.futbilito.data.PowersDao
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
+import com.robertolopezaguilera.futbilito.viewmodel.TiendaViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -51,7 +52,8 @@ fun JuegoScreen(
     onRestartNivel: () -> Unit,
     tiltX: Float,
     tiltY: Float,
-    gameViewModel: GameViewModel
+    gameViewModel: GameViewModel,
+    tiendaViewModel: TiendaViewModel? = null // 👈 NUEVO: Recibir el ViewModel de tienda
 ) {
     val context = LocalContext.current
 
@@ -229,6 +231,7 @@ fun JuegoScreen(
         println("   - Border obstacles: ${borderObstacles.size}")
     }
 
+    // 👇 NUEVO: Pasar el tiendaViewModel al MazeGame
     MazeGame(
         nivel = nivel!!,
         itemsFromDb = items,
@@ -251,6 +254,7 @@ fun JuegoScreen(
         onAddCoins = { coins ->
             gameViewModel.addMonedas(coins)
         },
-        gameViewModel = gameViewModel
+        gameViewModel = gameViewModel,
+        tiendaViewModel = tiendaViewModel // 👈 Pasar el ViewModel de tienda
     )
 }
