@@ -5,18 +5,26 @@ import android.content.Intent
 import android.media.MediaPlayer
 import android.os.IBinder
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MusicService : Service() {
 
     private var mediaPlayer: MediaPlayer? = null
-    private var isPrepared = false
-    private var shouldPlay = true
-    private var isPausedByUser = false
     private var currentTrack: MusicTrack = MusicTrack.MENU
-    private var currentVolume: Float = 0.7f // 🔹 NUEVO: Variable para trackear volumen actual
+    private var currentVolume: Float = 0.7f
+    private var isAppInForeground = true
+    private var isInitialized = false
 
-    // 🔹 NUEVO: SharedPreferences para cargar volumen guardado
     private lateinit var prefs: android.content.SharedPreferences
+
+    // 🔹 NUEVO: Crear nuestro propio CoroutineScope para el servicio
+    private val serviceScope = CoroutineScope(Dispatchers.Main)
+    private var retryJob: Job? = null
 
     enum class MusicTrack(val resourceId: Int) {
         MENU(R.raw.game_music_loop_14),
@@ -33,164 +41,151 @@ class MusicService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "Servicio de música creado")
-
-        // 🔹 NUEVO: Inicializar SharedPreferences
+        Log.d(TAG, "🎵 Servicio de música creado - INICIANDO MÚSICA MENU")
         prefs = getSharedPreferences("audio_settings", android.content.Context.MODE_PRIVATE)
-
-        // 🔹 NUEVO: Cargar volumen guardado al crear el servicio
         currentVolume = prefs.getFloat(PREF_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME)
-        Log.d(TAG, "Volumen cargado al crear servicio: $currentVolume")
+
+        // 🔹 INICIAR MÚSICA INMEDIATAMENTE AL CREAR EL SERVICIO
+        initializeMediaPlayer(MusicTrack.MENU)
     }
 
-    private fun initializeMediaPlayer(track: MusicTrack = MusicTrack.MENU) {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "🎵 Comando recibido: ${intent?.getStringExtra("action")}")
+
+        when (intent?.getStringExtra("action")) {
+            "play" -> handlePlay(intent)
+            "pause" -> pauseMusic()
+            "stop" -> stopMusic()
+            "resume" -> resumeMusic()
+            "set_volume" -> {
+                val volume = intent.getFloatExtra("volume", 0.7f)
+                setVolume(volume)
+                prefs.edit().putFloat(PREF_MUSIC_VOLUME, volume).apply()
+            }
+            "app_foreground" -> {
+                isAppInForeground = true
+                resumeMusic()
+            }
+            "app_background" -> {
+                isAppInForeground = false
+                pauseMusic()
+            }
+        }
+
+        // 🔹 IMPORTANTE: START_STICKY hace que el servicio se reinicie si es eliminado
+        return START_STICKY
+    }
+
+    private fun handlePlay(intent: Intent) {
+        val requestedTrack = when (intent.getStringExtra("track")) {
+            "game" -> MusicTrack.GAME
+            else -> MusicTrack.MENU
+        }
+
+        Log.d(TAG, "🔄 Solicitando track: $requestedTrack (actual: $currentTrack)")
+
+        // 🔹 SOLO CAMBIAR SI ES DIFERENTE EL TRACK
+        if (currentTrack != requestedTrack) {
+            changeTrack(requestedTrack)
+        } else {
+            // Si es el mismo track, solo asegurar que esté reproduciéndose
+            Log.d(TAG, "✅ Mismo track - asegurando reproducción")
+            if (isInitialized && mediaPlayer?.isPlaying == false && isAppInForeground) {
+                playMusic()
+            }
+        }
+    }
+
+    private fun initializeMediaPlayer(track: MusicTrack) {
         try {
-            // Liberar cualquier instancia previa
+            // Limpiar anterior si existe
             mediaPlayer?.release()
+            mediaPlayer = null
 
-            mediaPlayer = MediaPlayer()
-            currentTrack = track
+            // 🔹 CANCELAR cualquier job de reintento anterior
+            retryJob?.cancel()
 
-            mediaPlayer?.apply {
-                // Configurar el data source con el track específico
+            mediaPlayer = MediaPlayer().apply {
                 val afd = resources.openRawResourceFd(track.resourceId)
                 setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                 afd.close()
 
-                // 🔹 NUEVO: Aplicar volumen guardado inmediatamente después de preparar
+                isLooping = true // 🔹 LOOP INFINITO
+                setVolume(currentVolume, currentVolume)
+
                 setOnPreparedListener { mp ->
-                    Log.d(TAG, "MediaPlayer preparado correctamente para: $track")
-                    isPrepared = true
-
-                    // 🔹 APLICAR VOLUMEN GUARDADO
-                    mp.setVolume(currentVolume, currentVolume)
-                    Log.d(TAG, "Volumen aplicado al MediaPlayer: $currentVolume")
-
-                    if (shouldPlay && !isPausedByUser) {
+                    Log.d(TAG, "✅ MediaPlayer preparado para: $track")
+                    currentTrack = track
+                    isInitialized = true
+                    if (isAppInForeground) {
                         mp.start()
-                        Log.d(TAG, "Música reproduciéndose: $track con volumen: ${(currentVolume * 100).toInt()}%")
+                        Log.d(TAG, "▶️ Música iniciada: $track")
                     }
                 }
 
-                setOnCompletionListener { mp ->
-                    Log.d(TAG, "Canción completada: $track, reiniciando inmediatamente...")
-                    if (shouldPlay && isPrepared && !isPausedByUser) {
-                        mp.seekTo(0)
-                        mp.start()
+                setOnErrorListener { _, what, extra ->
+                    Log.e(TAG, "❌ Error en MediaPlayer: $what, $extra")
+                    isInitialized = false
+                    // 🔹 CORREGIDO: Usar serviceScope en lugar de lifecycleScope
+                    retryJob = serviceScope.launch {
+                        delay(1000)
+                        Log.d(TAG, "🔄 Reintentando inicializar MediaPlayer después de error")
+                        initializeMediaPlayer(currentTrack)
                     }
-                }
-
-                setOnErrorListener { mp, what, extra ->
-                    Log.e(TAG, "Error en MediaPlayer para $track - what: $what, extra: $extra")
-                    android.os.Handler(mainLooper).postDelayed({
-                        resetMediaPlayer()
-                    }, 1000)
                     true
+                }
+
+                setOnCompletionListener {
+                    // Esto no debería pasar porque tenemos loop, pero por si acaso
+                    Log.w(TAG, "⚠️ MediaPlayer completado - reiniciando por loop")
+                    if (isAppInForeground) {
+                        mediaPlayer?.start()
+                    }
                 }
 
                 prepareAsync()
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error al inicializar MediaPlayer para $track: ${e.message}")
-            e.printStackTrace()
-            resetMediaPlayer()
+            Log.e(TAG, "❌ Error al inicializar MediaPlayer: ${e.message}")
+            // 🔹 CORREGIDO: Reintentar también en caso de excepción
+            retryJob = serviceScope.launch {
+                delay(1000)
+                Log.d(TAG, "🔄 Reintentando inicializar MediaPlayer después de excepción")
+                initializeMediaPlayer(track)
+            }
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "onStartCommand recibido: ${intent?.getStringExtra("action")}, track: ${intent?.getStringExtra("track")}")
-
-        val requestedTrack = when (intent?.getStringExtra("track")) {
-            "game" -> MusicTrack.GAME
-            "menu" -> MusicTrack.MENU
-            else -> MusicTrack.MENU
-        }
-
-        when (intent?.getStringExtra("action")) {
-            "play" -> {
-                // 🔹 CAMBIO: Cargar volumen actualizado antes de reproducir
-                currentVolume = prefs.getFloat(PREF_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME)
-
-                if (currentTrack != requestedTrack || mediaPlayer == null) {
-                    Log.d(TAG, "Cambiando track de $currentTrack a $requestedTrack")
-                    initializeMediaPlayer(requestedTrack)
-                } else {
-                    shouldPlay = true
-                    isPausedByUser = false
-                    playMusic()
-                }
-            }
-            "pause" -> {
-                isPausedByUser = true
-                pauseMusic()
-            }
-            "stop" -> {
-                shouldPlay = false
-                isPausedByUser = false
-                stopMusic()
-            }
-            "set_volume" -> {
-                val volume = intent.getFloatExtra("volume", 0.7f)
-                setVolume(volume)
-                // 🔹 NUEVO: Guardar inmediatamente en SharedPreferences
-                prefs.edit().putFloat(PREF_MUSIC_VOLUME, volume).apply()
-                Log.d(TAG, "Volumen guardado en SharedPreferences: $volume")
-            }
-            else -> {
-                // 🔹 CAMBIO: Cargar volumen actualizado para acción por defecto
-                currentVolume = prefs.getFloat(PREF_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME)
-
-                if (currentTrack != requestedTrack || mediaPlayer == null) {
-                    initializeMediaPlayer(requestedTrack)
-                } else {
-                    shouldPlay = true
-                    isPausedByUser = false
-                    playMusic()
-                }
-            }
-        }
-        return START_STICKY
+    private fun changeTrack(newTrack: MusicTrack) {
+        Log.d(TAG, "🔄 Cambiando track de $currentTrack a $newTrack")
+        initializeMediaPlayer(newTrack)
     }
 
-    private fun setVolume(volume: Float) {
-        try {
-            currentVolume = volume.coerceIn(0f, 1f)
-            mediaPlayer?.setVolume(currentVolume, currentVolume)
-            Log.d(TAG, "Volumen de música ajustado a: ${(currentVolume * 100).toInt()}%")
-
-            // 🔹 NUEVO: Si el volumen es 0, pausar; si es > 0 y debería reproducir, reanudar
-            if (currentVolume == 0f && mediaPlayer?.isPlaying == true) {
-                pauseMusic()
-            } else if (currentVolume > 0f && shouldPlay && !isPausedByUser && mediaPlayer?.isPlaying == false) {
-                playMusic()
+    private fun resumeMusic() {
+        if (isAppInForeground && isInitialized && mediaPlayer?.isPlaying == false) {
+            try {
+                mediaPlayer?.start()
+                Log.d(TAG, "▶️ Música reanudada: $currentTrack")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Error al reanudar música: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error ajustando volumen: ${e.message}")
         }
     }
 
     private fun playMusic() {
-        try {
-            if (mediaPlayer == null) {
-                Log.d(TAG, "MediaPlayer nulo, reinicializando...")
-                initializeMediaPlayer(currentTrack)
-                return
-            }
+        if (!isAppInForeground) {
+            Log.d(TAG, "📱 App en background, no se reproduce música")
+            return
+        }
 
-            if (isPrepared && !mediaPlayer!!.isPlaying && shouldPlay && !isPausedByUser) {
-                // 🔹 NUEVO: Asegurar que el volumen actual esté aplicado
-                mediaPlayer!!.setVolume(currentVolume, currentVolume)
-                mediaPlayer!!.start()
-                Log.d(TAG, "Música reanudada: $currentTrack con volumen: ${(currentVolume * 100).toInt()}%")
-            } else if (!isPrepared) {
-                Log.d(TAG, "MediaPlayer no está preparado, esperando...")
-            } else if (isPausedByUser) {
-                Log.d(TAG, "Música pausada manualmente, no se reanuda automáticamente")
+        try {
+            if (isInitialized && mediaPlayer?.isPlaying == false) {
+                mediaPlayer?.start()
+                Log.d(TAG, "▶️ Música iniciada: $currentTrack")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error al reproducir música: ${e.message}")
-            resetMediaPlayer()
+            Log.e(TAG, "❌ Error al reproducir música: ${e.message}")
         }
     }
 
@@ -198,61 +193,47 @@ class MusicService : Service() {
         try {
             if (mediaPlayer?.isPlaying == true) {
                 mediaPlayer?.pause()
-                Log.d(TAG, "Música pausada: $currentTrack")
+                Log.d(TAG, "⏸️ Música pausada")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error al pausar música: ${e.message}")
+            Log.e(TAG, "❌ Error al pausar música: ${e.message}")
         }
     }
 
     private fun stopMusic() {
         try {
-            shouldPlay = false
-            isPausedByUser = false
+            // 🔹 CANCELAR cualquier job pendiente
+            retryJob?.cancel()
+
             mediaPlayer?.stop()
             mediaPlayer?.release()
             mediaPlayer = null
-            isPrepared = false
-            stopSelf()
-            Log.d(TAG, "Servicio de música detenido")
+            isInitialized = false
+            Log.d(TAG, "⏹️ Música detenida y recursos liberados")
         } catch (e: Exception) {
-            Log.e(TAG, "Error al detener música: ${e.message}")
+            Log.e(TAG, "❌ Error al detener música: ${e.message}")
         }
     }
 
-    private fun resetMediaPlayer() {
-        try {
-            mediaPlayer?.release()
-            mediaPlayer = null
-            isPrepared = false
-            isPausedByUser = false
-            if (shouldPlay) {
-                android.os.Handler(mainLooper).postDelayed({
-                    initializeMediaPlayer(currentTrack)
-                }, 500)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error al resetear MediaPlayer: ${e.message}")
-        }
-    }
-
-    // 🔹 NUEVO: Método para cargar volumen guardado (útil cuando el servicio ya está ejecutándose)
-    private fun loadSavedVolume() {
-        currentVolume = prefs.getFloat(PREF_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME)
-        Log.d(TAG, "Volumen recargado: $currentVolume")
+    private fun setVolume(volume: Float) {
+        currentVolume = volume.coerceIn(0f, 1f)
+        mediaPlayer?.setVolume(currentVolume, currentVolume)
+        Log.d(TAG, "🔊 Volumen ajustado: ${(currentVolume * 100).toInt()}%")
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(TAG, "onDestroy llamado")
-        try {
-            shouldPlay = false
-            isPausedByUser = false
-            mediaPlayer?.release()
-            mediaPlayer = null
-            isPrepared = false
-        } catch (e: Exception) {
-            Log.e(TAG, "Error en onDestroy: ${e.message}")
-        }
+        Log.d(TAG, "🚨 Servicio de música destruido")
+
+        // 🔹 LIMPIAR recursos
+        retryJob?.cancel()
+        serviceScope.cancel() // Cancelar el scope completo
+        stopMusic()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.d(TAG, "📱 App removida del recents - deteniendo servicio")
+        stopSelf()
     }
 }

@@ -53,6 +53,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.robertolopezaguilera.futbilito.MusicManager
 import com.robertolopezaguilera.futbilito.MusicService
 import com.robertolopezaguilera.futbilito.SoundManager
 import com.robertolopezaguilera.futbilito.data.Usuario
@@ -73,48 +74,47 @@ fun AjustesScreen(
     var vibrationEnabled by remember { mutableStateOf(true) }
     var showEditNameDialog by remember { mutableStateOf(false) }
 
-    // 🔹 CORRECCIÓN: Cargar volúmenes persistentes
-    var musicVolume by remember { mutableStateOf(soundManager.loadMusicVolume()) }
+    // 🔹 CORRECCIÓN: Volumen de música ahora se maneja con MusicManager
+    var musicVolume by remember { mutableStateOf(0.7f) } // Valor por defecto
     var soundVolume by remember { mutableStateOf(soundManager.loadEffectsVolume()) }
-    var previousMusicVolume by remember { mutableStateOf(soundManager.loadMusicVolume()) }
+    var previousMusicVolume by remember { mutableStateOf(0.7f) }
     var previousSoundVolume by remember { mutableStateOf(soundManager.loadEffectsVolume()) }
 
-    // 🔹 FUNCIONES PARA MANEJAR AUDIO
-    val onMusicVolumeChange = { newVolume: Float ->
+    // 🔹 CORRECCIÓN: Las funciones deben retornar Unit, no Int
+    val onMusicVolumeChange: (Float) -> Unit = { newVolume: Float ->
         musicVolume = newVolume
-        updateMusicVolume(context, newVolume)
-        // 🔹 GUARDAR VOLUMEN PERSISTENTE
-        soundManager.saveMusicVolume(newVolume)
+        // 🔹 CAMBIO: Usar MusicManager para volumen de música
+        MusicManager.setMusicVolume(context, newVolume)
         // Solo reproducir sonido si no es mute completo
         if (newVolume > 0) {
             soundManager.playSelectSound()
         }
+        Log.d("AjustesScreen", "Volumen de música cambiado a: ${(newVolume * 100).toInt()}%")
     }
 
-    val onSoundVolumeChange = { newVolume: Float ->
+    val onSoundVolumeChange: (Float) -> Unit = { newVolume: Float ->
         soundVolume = newVolume
-        // 🔹 GUARDAR VOLUMEN PERSISTENTE
+        // 🔹 CORRECTO: SoundManager maneja solo efectos
         soundManager.setEffectsVolume(newVolume)
-        // El SoundManager ya reproduce el sonido de prueba automáticamente
+        Log.d("AjustesScreen", "Volumen de efectos cambiado a: ${(newVolume * 100).toInt()}%")
     }
 
-    val onMusicMuteToggle = {
+    val onMusicMuteToggle: () -> Unit = {
         if (musicVolume > 0f) {
             // Silenciar: guardar volumen actual y poner a 0
             previousMusicVolume = musicVolume
             musicVolume = 0f
-            updateMusicVolume(context, 0f)
-            soundManager.saveMusicVolume(0f)
+            MusicManager.setMusicVolume(context, 0f)
         } else {
             // Reactivar: restaurar volumen anterior
             musicVolume = previousMusicVolume
-            updateMusicVolume(context, previousMusicVolume)
-            soundManager.saveMusicVolume(previousMusicVolume)
+            MusicManager.setMusicVolume(context, previousMusicVolume)
             soundManager.playSelectSound()
         }
+        Log.d("AjustesScreen", "Música ${if (musicVolume > 0f) "activada" else "silenciada"}")
     }
 
-    val onSoundMuteToggle = {
+    val onSoundMuteToggle: () -> Unit = {
         if (soundVolume > 0f) {
             // Silenciar: guardar volumen actual y poner a 0
             previousSoundVolume = soundVolume
@@ -125,17 +125,16 @@ fun AjustesScreen(
             soundVolume = previousSoundVolume
             soundManager.setEffectsVolume(previousSoundVolume)
         }
+        Log.d("AjustesScreen", "Efectos ${if (soundVolume > 0f) "activados" else "silenciados"}")
     }
 
-    // 🔹 NUEVO: Cargar ajustes guardados
+    // 🔹 NUEVO: Cargar volúmenes iniciales
     LaunchedEffect(Unit) {
-        // Asegurar que los volúmenes estén sincronizados
-        musicVolume = soundManager.loadMusicVolume()
+        // Solo cargar volumen de efectos desde SoundManager
         soundVolume = soundManager.loadEffectsVolume()
-        previousMusicVolume = musicVolume
         previousSoundVolume = soundVolume
 
-        Log.d("AjustesScreen", "Volúmenes inicializados - Música: $musicVolume, Efectos: $soundVolume")
+        Log.d("AjustesScreen", "Ajustes inicializados - Efectos: $soundVolume")
     }
 
     Box(
@@ -198,7 +197,7 @@ fun AjustesScreen(
                         soundManager = soundManager
                     )
 
-                    // 🔹 SECCIÓN: Audio
+                    // 🔹 SECCIÓN: Audio - CORREGIDA (ahora con tipos explícitos)
                     AudioSettingsSection(
                         musicVolume = musicVolume,
                         soundVolume = soundVolume,

@@ -11,63 +11,52 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.robertolopezaguilera.futbilito.data.GameDatabase
 import com.robertolopezaguilera.futbilito.ui.JuegoScreen
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModel
 import com.robertolopezaguilera.futbilito.viewmodel.GameViewModelFactory
 import com.robertolopezaguilera.futbilito.viewmodel.TiendaViewModel
 import com.robertolopezaguilera.futbilito.viewmodel.TiendaViewModelFactory
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class GameActivity : ComponentActivity(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
-
     private var tiltX by mutableStateOf(0f)
     private var tiltY by mutableStateOf(0f)
-
     private lateinit var db: GameDatabase
 
-    // 👇 ViewModels
     private val gameViewModel: GameViewModel by viewModels {
         GameViewModelFactory(GameDatabase.getDatabase(this))
     }
 
-    // 👇 NUEVO: TiendaViewModel
     private lateinit var tiendaViewModel: TiendaViewModel
-
-    // 🔹 NUEVO: Variable para controlar si ya se inició la música
-    private var musicStarted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         db = GameDatabase.getDatabase(this)
-
-        // 👇 CORREGIDO: Inicializar TiendaViewModel con el DAO
         tiendaViewModel = ViewModelProvider(
             this,
-            TiendaViewModelFactory(gameViewModel, db.tiendaDao()) // 👈 Añadir tiendaDao
+            TiendaViewModelFactory(gameViewModel, db.tiendaDao())
         )[TiendaViewModel::class.java]
 
-        // 🔹 Recibir el nivelId desde el Intent
         val nivelId = intent.getIntExtra("nivelId", 1)
-
         sensorManager = getSystemService(SensorManager::class.java)
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-
-        // 👇 CARGAR USUARIO AL INICIAR LA ACTIVITY
         gameViewModel.loadUsuario()
 
-        // 🔹 CAMBIO: Solo reproducir música de juego si no se ha iniciado antes
-        if (!musicStarted) {
-            playGameMusic()
-            musicStarted = true
-        }
+        // 🔹 CAMBIO: Usar playGameMusic en lugar de playGameMusicSafely
+        Log.d("GameActivity", "🎮 Iniciando GameActivity - cambiando a música de JUEGO")
+        MusicManager.playGameMusic(this)
 
         setContent {
-            // 👇 Observar el estado de carga del usuario
+            val context = LocalContext.current
             val usuario by gameViewModel.usuario.collectAsState()
 
             LaunchedEffect(usuario) {
@@ -76,7 +65,12 @@ class GameActivity : ComponentActivity(), SensorEventListener {
                 }
             }
 
-            // 👇 NUEVO: Pasar el TiendaViewModel al JuegoScreen
+            // 🔹 EFECTO: Asegurar música de juego mientras estemos en esta activity
+            LaunchedEffect(Unit) {
+                delay(100)
+                MusicManager.playGameMusic(context)
+            }
+
             JuegoScreen(
                 nivelId = nivelId,
                 itemDao = db.itemDao(),
@@ -90,40 +84,56 @@ class GameActivity : ComponentActivity(), SensorEventListener {
                 tiltX = tiltX,
                 tiltY = tiltY,
                 gameViewModel = gameViewModel,
-                tiendaViewModel = tiendaViewModel // 👈 NUEVO: Pasar el ViewModel de tienda
+                tiendaViewModel = tiendaViewModel
             )
         }
     }
 
     override fun onResume() {
         super.onResume()
+        Log.d("GameActivity", "🎮 GameActivity en primer plano")
+        MusicManager.notifyAppInForeground(this)
+
         accelerometer?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
-        // 👇 Recargar usuario al resumir la activity por si acaso
         gameViewModel.loadUsuario()
 
-        // 🔹 CAMBIO: Solo reanudar si la música ya estaba iniciada
-        // No llamar a resumeGameMusic() aquí para evitar reinicios
+        // 🔹 CRÍTICO: Asegurar música de juego al resumir
+        lifecycleScope.launch {
+            delay(150)
+            if (!isFinishing) {
+                Log.d("GameActivity", "🎵 Verificando música de JUEGO en onResume")
+                MusicManager.playGameMusic(this@GameActivity)
+            }
+        }
     }
 
     override fun onPause() {
         super.onPause()
+        Log.d("GameActivity", "🎮 GameActivity en pausa")
         sensorManager.unregisterListener(this)
-
-    }
-
-    override fun onBackPressed() {
-        // 🔹 NUEVO: Cambiar a música de menú al volver
-        playMenuMusic()
-        musicStarted = false // 🔹 Resetear para la próxima vez
-        super.onBackPressed()
+        // NO pausar música aquí - dejar que MainActivity la restaure
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        // 🔹 NO detener la música aquí, solo cuando la app se cierre completamente
-        // La música debe continuar entre actividades
+        Log.d("GameActivity", "🗑️ GameActivity destruida")
+    }
+
+    override fun onBackPressed() {
+        Log.d("GameActivity", "🔙 Volviendo al menú desde juego")
+
+        // 🔹 CRÍTICO: Cambiar a música de MENÚ ANTES de terminar la actividad
+        MusicManager.ensureMenuMusic(this)
+
+        super.onBackPressed()
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        Log.d("GameActivity", "👤 Usuario saliendo de GameActivity")
+        MusicManager.notifyAppInBackground(this)
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -134,40 +144,4 @@ class GameActivity : ComponentActivity(), SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
-
-    private fun playGameMusic() {
-        try {
-            val intent = Intent(this, MusicService::class.java)
-            intent.putExtra("action", "play")
-            intent.putExtra("track", "game") // 🔹 Especificar track de juego
-            startService(intent)
-            Log.d("GameActivity", "Música de juego iniciada")
-        } catch (e: Exception) {
-            Log.e("GameActivity", "Error al iniciar música de juego: ${e.message}")
-        }
-    }
-
-    // 🔹 NUEVO: Método para cambiar a música de menú
-    private fun playMenuMusic() {
-        try {
-            val intent = Intent(this, MusicService::class.java)
-            intent.putExtra("action", "play")
-            intent.putExtra("track", "menu") // 🔹 Especificar track de menú
-            startService(intent)
-            Log.d("GameActivity", "Cambiando a música de menú")
-        } catch (e: Exception) {
-            Log.e("GameActivity", "Error al cambiar a música de menú: ${e.message}")
-        }
-    }
-
-    private fun pauseMusic() {
-        try {
-            val intent = Intent(this, MusicService::class.java)
-            intent.putExtra("action", "pause")
-            startService(intent)
-            Log.d("GameActivity", "Música pausada desde GameActivity")
-        } catch (e: Exception) {
-            Log.e("GameActivity", "Error al pausar música: ${e.message}")
-        }
-    }
 }

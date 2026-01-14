@@ -1,6 +1,7 @@
 package com.robertolopezaguilera.futbilito.ui
 
 import android.content.Intent
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.robertolopezaguilera.futbilito.MusicManager
 import com.robertolopezaguilera.futbilito.MusicService
 import com.robertolopezaguilera.futbilito.data.GameDatabase
 import com.robertolopezaguilera.futbilito.data.Item
@@ -40,6 +42,7 @@ import com.robertolopezaguilera.futbilito.viewmodel.TiendaViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -53,20 +56,31 @@ fun JuegoScreen(
     tiltX: Float,
     tiltY: Float,
     gameViewModel: GameViewModel,
-    tiendaViewModel: TiendaViewModel? = null // 👈 NUEVO: Recibir el ViewModel de tienda
+    tiendaViewModel: TiendaViewModel? = null
 ) {
     val context = LocalContext.current
 
-    // 🔹 Control de música opcional en el juego
-    var isGameMusic by remember { mutableStateOf(true) }
-
-    // Controlar música basado en el estado
-    LaunchedEffect(isGameMusic) {
-        val intent = Intent(context, MusicService::class.java)
-        intent.putExtra("action", "play")
-        intent.putExtra("track", if (isGameMusic) "game" else "menu")
-        context.startService(intent)
-    }
+//    // 🔹 CORRECCIÓN: Solo UN LaunchedEffect para controlar la música
+//    LaunchedEffect(Unit) {
+//        Log.d("JuegoScreen", "🎵 === INICIANDO MÚSICA DE JUEGO ===")
+//
+//        // Pequeño delay para asegurar que todo esté listo
+//        delay(300)
+//
+//        // 🔹 SOLO UNA llamada a playGameMusic
+//        MusicManager.playGameMusic(context)
+//
+//        Log.d("JuegoScreen", "🎵 === MÚSICA DE JUEGO INICIADA ===")
+//    }
+//
+//    // 🔹 MEJORADO: DisposableEffect simplificado
+//    DisposableEffect(Unit) {
+//        onDispose {
+//            Log.d("JuegoScreen", "🎵 === VOLVIENDO A MÚSICA DE MENÚ ===")
+//            // Cambiar a música de menú inmediatamente
+//            MusicManager.playMenuMusic(context)
+//        }
+//    }
 
     // Estados de carga separados para cada tipo de dato
     var nivel by remember { mutableStateOf<com.robertolopezaguilera.futbilito.data.Nivel?>(null) }
@@ -255,6 +269,6 @@ fun JuegoScreen(
             gameViewModel.addMonedas(coins)
         },
         gameViewModel = gameViewModel,
-        tiendaViewModel = tiendaViewModel // 👈 Pasar el ViewModel de tienda
+        tiendaViewModel = tiendaViewModel
     )
 }

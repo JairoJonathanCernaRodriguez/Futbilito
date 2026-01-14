@@ -195,7 +195,6 @@ val obstaclesNivel13 = listOf(
     Obstaculo(-140, 160, 200, 40, nivelId = 13),
     Obstaculo(-60, 40, 40, 160, nivelId = 13),
     Obstaculo(-420, -360, 40, 280, nivelId = 13),
-    Obstaculo(340, 400, 240, 40, nivelId = 13),
     Obstaculo(180, -280, 40, 240, nivelId = 13),
     Obstaculo(140, 240, 40, 200, nivelId = 13),
     Obstaculo(-60, -40, 160, 40, nivelId = 13),

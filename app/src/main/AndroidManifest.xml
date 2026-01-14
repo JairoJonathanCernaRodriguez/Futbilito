@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application
+        android:name=".FutbilitoApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -19,29 +20,28 @@
         android:theme="@style/Theme.Futbilito"
         tools:targetApi="31">
 
-        <activity
-            android:name=".GameActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Futbilito" />
+    <activity
+        android:name=".GameActivity"
+        android:exported="false"
+        android:theme="@style/Theme.Futbilito" />
 
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:label="@string/app_name"
-            android:theme="@style/Theme.Futbilito">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-1678389918256405~7551858740"/>
+    <activity
+        android:name=".MainActivity"
+        android:exported="true"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.Futbilito">
+        <intent-filter>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+    </activity>
 
-        <service
-            android:name=".MusicService"
-            android:enabled="true"
-            android:exported="false" />
+    <meta-data
+        android:name="com.google.android.gms.ads.APPLICATION_ID"
+        android:value="ca-app-pub-1678389918256405~7551858740"/>
 
-    </application>
-</manifest>
+        <!-- Servicio de música -->
+        <service android:name=".MusicService" />
+
+</application>
+    </manifest>

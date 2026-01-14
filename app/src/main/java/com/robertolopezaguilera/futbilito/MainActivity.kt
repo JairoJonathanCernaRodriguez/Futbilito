@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.findNavController
 import com.robertolopezaguilera.futbilito.data.*
 import com.robertolopezaguilera.futbilito.niveles.*
 import com.robertolopezaguilera.futbilito.ui.AppNavigation
@@ -22,27 +23,29 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var db: GameDatabase
+    private var musicStarted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         db = GameDatabase.getDatabase(this)
-
         lifecycleScope.launch { inicializarNiveles() }
 
-        // 🔹 INICIAR EL SERVICIO DE MÚSICA CON UN PEQUEÑO DELAY
-        lifecycleScope.launch {
-            startMenuMusicService()
+        // 🔹 INICIAR SERVICIO DE MÚSICA UNA SOLA VEZ
+        if (!musicStarted) {
+            Log.d("MainActivity", "🚀 INICIANDO SERVICIO DE MÚSICA MENU")
+            MusicManager.startMenuMusic(this)
+            musicStarted = true
         }
 
         setContent {
             var isLoaded by remember { mutableStateOf(false) }
             var usuario by remember { mutableStateOf<Usuario?>(null) }
 
-            // 🔹 Cargar usuario 1 sola vez
             LaunchedEffect(Unit) {
                 usuario = withContext(Dispatchers.IO) { db.usuarioDao().getUsuario() }
                 isLoaded = true
@@ -53,65 +56,53 @@ class MainActivity : ComponentActivity() {
             } else {
                 AppNavigation(
                     startDestination = if (usuario == null) "registro" else "main",
-                    db = db
+                    db = db,
+                    onGameActivityLaunched = {
+                        Log.d("MainActivity", "🎮 GameActivity lanzada")
+                    }
                 )
             }
         }
     }
 
-    // 🔹 CAMBIO: Método específico para música de menú
-    private fun startMenuMusicService() {
-        try {
-            val intent = Intent(this, MusicService::class.java)
-            intent.putExtra("action", "play")
-            intent.putExtra("track", "menu") // 🔹 Especificar track de menú
-            startService(intent)
-            Log.d("MainActivity", "Servicio de música de menú iniciado")
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Error al iniciar servicio de música de menú: ${e.message}")
-        }
-    }
-
-    // 🔹 PAUSAR MÚSICA CUANDO LA APP ENTRA EN SEGUNDO PLANO
-    override fun onPause() {
-        super.onPause()
-        pauseMusic()
-    }
-
-    // 🔹 REANUDAR MÚSICA CUANDO LA APP VUELVE AL PRIMER PLANO
     override fun onResume() {
         super.onResume()
-        resumeMusic()
-    }
+        Log.d("MainActivity", "🏠 MainActivity en primer plano")
+        MusicManager.notifyAppInForeground(this)
 
-    private fun pauseMusic() {
-        val intent = Intent(this, MusicService::class.java)
-        intent.putExtra("action", "pause")
-        startService(intent)
-    }
-
-    private fun resumeMusic() {
-        try {
-            val intent = Intent(this, MusicService::class.java)
-            intent.putExtra("action", "play")
-            intent.putExtra("track", "menu") // 🔹 Especificar track de menú
-            startService(intent)
-            Log.d("MainActivity", "Música de menú reanudada")
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Error al reanudar música de menú: ${e.message}")
+        // 🔹 SOLO REANUDAR SI ESTÁ PAUSADA, NO REINICIAR
+        lifecycleScope.launch {
+            delay(100)
+            if (musicStarted) {
+                Log.d("MainActivity", "🔄 Reanudando música si está pausada")
+                MusicManager.resumeMusic(this@MainActivity)
+            }
         }
     }
 
-    // 🔹 DETENER MÚSICA CUANDO LA APP SE CIERRA
-    override fun onDestroy() {
-        super.onDestroy()
-        stopMusic()
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        Log.d("MainActivity", "📱 App en segundo plano")
+        MusicManager.notifyAppInBackground(this)
     }
 
-    private fun stopMusic() {
-        val intent = Intent(this, MusicService::class.java)
-        intent.putExtra("action", "stop")
-        startService(intent)
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d("MainActivity", "🗑️ MainActivity destruida")
+        if (isFinishing) {
+            Log.d("MainActivity", "🚨 Cerrando app - deteniendo música")
+            MusicManager.stopMusic(this)
+            musicStarted = false
+        }
+    }
+
+    override fun onBackPressed() {
+        if (isTaskRoot) {
+            Log.d("MainActivity", "🔙 Saliendo de la app")
+            MusicManager.stopMusic(this)
+            musicStarted = false
+        }
+        super.onBackPressed()
     }
 
     private suspend fun inicializarNiveles() {
@@ -120,16 +111,11 @@ class MainActivity : ComponentActivity() {
             if (dao.getAllNiveles().isEmpty()) {
                 val niveles = mutableListOf<Nivel>()
                 var id = 1
-                repeat(10) { niveles.add(Nivel(id++, 60, 0,
-                    "Tutorial")) }
-                repeat(30) { niveles.add(Nivel(id++, 60, 0,
-                    "Principiante")) }
-                repeat(30) { niveles.add(Nivel(id++, 60, 0,
-                    "Medio")) }
-                repeat(20) { niveles.add(Nivel(id++, 60, 0,
-                    "Avanzado")) }
-                repeat(10) { niveles.add(Nivel(id++, 60, 0,
-                    "Experto")) }
+                repeat(10) { niveles.add(Nivel(id++, 60, 4, "Tutorial")) }
+                repeat(30) { niveles.add(Nivel(id++, 60, 4, "Principiante")) }
+                repeat(30) { niveles.add(Nivel(id++, 60, 4, "Medio")) }
+                repeat(20) { niveles.add(Nivel(id++, 60, 0, "Avanzado")) }
+                repeat(10) { niveles.add(Nivel(id++, 60, 0, "Experto")) }
                 dao.insertNiveles(niveles)
 
                 val daoItems = db.itemDao()
@@ -164,7 +150,7 @@ class MainActivity : ComponentActivity() {
                 )
                 powersDao.insertarPower(Powers(coordenadaX = 100, coordenadaY = -100, nivelId = 1,
                     tipo = "speed_boost"))
-                //Principiate
+                //Principiante
 
                 daoItems.insertListItem(itemsNivel11)
                 daoItems.insertListItem(itemsNivel12)
@@ -181,6 +167,8 @@ class MainActivity : ComponentActivity() {
                 powersDao.insertarPower(Powers(coordenadaX = -380, coordenadaY = -560, nivelId = 12,
                     tipo = "speed_boost"))
                 daoObstaculos.insertListObstculo(obstaclesNivel13)
+                powersDao.insertarPower(Powers(coordenadaX = 380, coordenadaY = -440, nivelId = 13,
+                    tipo = "ghost_mode"))
                 daoObstaculos.insertListObstculo(obstaclesNivel14)
                 daoObstaculos.insertListObstculo(obstaclesNivel15)
                 daoObstaculos.insertListObstculo(obstaclesNivel16)
@@ -195,8 +183,6 @@ class MainActivity : ComponentActivity() {
                     tipo = "ghost_mode"))
 
                 //Dificil
-
-
             }
         }
     }
